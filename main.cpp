@@ -22,11 +22,9 @@ inline void checkErr(cl_int err, const char * name) {
 int main(void){
    cl_int err;
 
-   const std::string hw("Hello World\n");
-
    std::vector<cl::Platform> platformList;
    cl::Platform::get(&platformList);
-   
+
    checkErr(platformList.size()!=0 ? CL_SUCCESS : -1, "cl::Platform::get");
 
    std::cerr << "Platform number is: " << platformList.size() << std::endl;
@@ -48,17 +46,25 @@ int main(void){
 
    std::cout<<"Created context."<< std::endl;
 
-   char * outH = new char[hw.length()+1];
-   cl::Buffer outCL(
-     context,
-     CL_MEM_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
-     hw.length()+1,
-     outH,
-     &err);
+   const int inSize = 200000;
+
+   float* outH = new float[inSize];
+   cl::Buffer outCL( context, CL_MEM_WRITE_ONLY, inSize * sizeof( float ) );
 
    checkErr(err, "Buffer::Buffer()");
 
-   std::cout<<"Created buffer."<< std::endl;
+   cl::Buffer inCL( context, CL_MEM_READ_ONLY, inSize * sizeof( float ) );
+
+   checkErr(err, "Buffer::Buffer()");
+
+
+   std::cout<<"Created buffers."<< std::endl;
+
+   float *f = new float[inSize];
+   for( int i = 0; i < inSize; i++ ){
+     f[i] = i;
+   }
+
 
    std::vector<cl::Device> devices;
    devices = context.getInfo<CL_CONTEXT_DEVICES>();
@@ -66,10 +72,8 @@ int main(void){
 
    std::cout<<"Num available devices: "<< devices.size()<< std::endl;
 
-
-
-   std::ifstream file("lesson1_kernel.cl");
-   checkErr(file.is_open() ? CL_SUCCESS:-1, "lesson1_kernel.cl");
+   std::ifstream file("kernel0.cl");
+   checkErr(file.is_open() ? CL_SUCCESS:-1, "kernel0.cl");
    std::string prog(
      std::istreambuf_iterator<char>(file),
      (std::istreambuf_iterator<char>()));
@@ -84,9 +88,11 @@ int main(void){
    std::cout<<"Built program"<< std::endl;
 
 
-   cl::Kernel kernel(program, "hello", &err);
+   cl::Kernel kernel(program, "square", &err);
    checkErr(err, "Kernel::Kernel()");
    err = kernel.setArg(0, outCL);
+   checkErr(err, "Kernel::setArg()");
+   err = kernel.setArg(1, inCL);
    checkErr(err, "Kernel::setArg()");
 
 
@@ -94,11 +100,15 @@ int main(void){
 
 
    cl::CommandQueue queue(context, devices[0], 0, &err);
-   checkErr(err, "CommandQueue::CommandQueue()");cl::Event event;
+   checkErr(err, "CommandQueue::CommandQueue()");
+
+   queue.enqueueWriteBuffer( inCL, CL_TRUE, 0, inSize * sizeof(float), f);
+
+   cl::Event event;
    err = queue.enqueueNDRangeKernel(
      kernel,
      cl::NullRange,
-     cl::NDRange(hw.length()+1),
+     cl::NDRange(inSize),
      cl::NDRange(1, 1),
      NULL,
      &event);
@@ -107,14 +117,21 @@ int main(void){
    std::cout<<"Kernel executing"<< std::endl ;
 
    event.wait();
+
+   float *fout = new float[inSize];
    err = queue.enqueueReadBuffer(
       outCL,
       CL_TRUE,
       0,
-      hw.length()+1,
-      outH);
+      inSize * sizeof( float ),
+      fout);
+
    checkErr(err, "ComamndQueue::enqueueReadBuffer()");
-   std::cout << "Kernel output:" << outH << std::endl;
+   std::cout << "Kernel output:" << std::endl;
+
+   for( int i = 0; i < inSize; i++ ){
+     std::cout<< fout[i] << std::endl;
+   }
 
    std::cout<<"Kernel finished executing."<< std::endl;
 
