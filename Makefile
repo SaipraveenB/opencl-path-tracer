@@ -21,3 +21,9 @@ test: main.o
 
 main.o: main.cpp
 	g++ -c $< $(CCFLAGS)
+
+.PHONY: all clean
+
+clean:
+	rm *.o
+	rm test
