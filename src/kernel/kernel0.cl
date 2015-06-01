@@ -2,7 +2,6 @@
 
 __constant sampler_t sampler =  CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;
 
-
 typedef struct _Camera
 {
   float3 vPos;
@@ -35,8 +34,47 @@ float3 shootVector( int2 screen, Camera* cam )
 
 }
 
-Intersection ray_intersect( float3 vPos, float3 vDir, Sphere* pSphere ){
-  // For now calculate line distance to each sphere and get the nearest intersection.
+inline float getDiscriminant(float3 lStart, float3 lDir, Sphere sphere)
+{
+    float dot1 = dot(lDir, (lDir - sphere.vPos));
+    dot1 *= dot1;
+    float dist = dot(lDir - sphere.vPos,lDir - sphere.vPos);
+    return dot1 - dist + (sphere.fRadius*sphere.fRadius);
+}
+
+Intersection ray_intersect( float3 vPos, float3 vDir, Sphere* pSphere, int maxSpheres )
+{
+    Intersection vIntPoint;
+    vIntPoint.pSphere = NULL;
+    int curDisc;
+    float minDist = 340282346638528859811704183484516925440.0;
+    float distA, distB;
+    for(int i=0;i < maxSpheres;i++)
+    {
+        curDisc = getDiscriminant(vPos,vDir,pShere[i]);
+        if(curDisc < 0)
+            continue;
+        distA = -(dot(vDir,vPos - pShere.vPos)) - curDisc;
+        distB = distA + 2*curDisc;
+        if(distA < 0)
+            distA = minDist;
+        if(distB < 0)
+            distB = minDist;
+        if(distA < minDist)
+        {
+            minDist = distA;
+            vIntPoint.pSphere = pSphere + i;
+            vIntPoint.vPos = vPos + distA * vDir;
+        }
+        if(distB < minDist)
+        {
+            minDist = distB;
+            vIntPoint.pSphere = pSphere + i;
+            vIntPoint.vPos = vPos + distB * vDir;
+        }
+    }
+
+    return vIntPoint;
 }
 
 

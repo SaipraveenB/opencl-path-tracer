@@ -16,6 +16,8 @@ OpenCL entry point
 #include <iterator>
 #include <time.h>
 
+#include "sphere.h"
+
 #define WIDTH 1920
 #define HEIGHT 1080
 #define FPS_INTERVAL 0.5
@@ -185,7 +187,7 @@ int main(int argc, char** argv){
   CGLContextObj kCGLContext = CGLGetCurrentContext();
   CGLShareGroupObj kCGLShareGroup = CGLGetShareGroup(kCGLContext);
   #endif
-  
+
   cl_context_properties cprops[6] = {CL_CONTEXT_PLATFORM, (cl_context_properties)(platformList[0])(),CL_CONTEXT_PROPERTY_USE_CGL_SHAREGROUP_APPLE , (cl_context_properties) kCGLShareGroup, 0, 0};
 
   cl::Context context( CL_DEVICE_TYPE_CPU, cprops, NULL, NULL, &err);
@@ -199,13 +201,15 @@ int main(int argc, char** argv){
   checkGLErr( "RenderTarget::RenderTarget" );
 
   const int inSize = 2000000;
-
+  /*
   float* outH = new float[inSize];
   cl::Buffer outCL( context, CL_MEM_WRITE_ONLY, inSize * sizeof( float ) );
+  */
+  Sphere* spheres = new Sphere[inSize];
+  cl::Buffer clSpheres( context, CL_MEM_WRITE_ONLY, inSize * sizeof(Sphere));
 
   checkErr(err, "Buffer::Buffer()");
-
-  cl::Buffer inCL( context, CL_MEM_READ_ONLY, inSize * sizeof( float ) );
+  cl::Buffer clCamera( context, CL_MEM_READ_ONLY, inSize * sizeof( float ) );
 
   checkErr(err, "Buffer::Buffer()");
 
@@ -244,9 +248,9 @@ int main(int argc, char** argv){
   cl::Kernel kernel(program, "square", &err);
   checkErr(err, "Kernel::Kernel()");
 
-  err = kernel.setArg(0, outCL);
+  err = kernel.setArg(0, clSpheres);
   checkErr(err, "Kernel::setArg()");
-  err = kernel.setArg(1, inCL);
+  err = kernel.setArg(1, clCamera);
   checkErr(err, "Kernel::setArg()");
   err = kernel.setArg(2, imgGL);
   checkErr(err, "Kernel::setArg()");
@@ -258,7 +262,8 @@ int main(int argc, char** argv){
   cl::CommandQueue queue(context, devices[0], 0, &err);
   checkErr(err, "CommandQueue::CommandQueue()");
 
-  queue.enqueueWriteBuffer( inCL, CL_TRUE, 0, inSize * sizeof(float), f);
+  queue.enqueueWriteBuffer( clCamera, CL_TRUE, 0, inSize * sizeof(float), f);
+  queue.enqueueWriteBuffer( clSpheres, CL_TRUE, 0, inSize * sizeof(Sphere), f);
 
   vSharedUnits = new std::vector<cl::Memory>();
   vSharedUnits->push_back( imgGL );
@@ -270,10 +275,10 @@ int main(int argc, char** argv){
     mainLoop( queue, context, kernel );
   }
 
-
+  /* Previous Program. Remove these if you think they are not required.
   float *fout = new float[inSize];
-  err = queue.enqueueReadBuffer( outCL, CL_TRUE, 0, inSize * sizeof( float ), fout);
-
+  err = queue.enqueueReadBuffer( clSpheres, CL_TRUE, 0, inSize * sizeof(Sphere), fout);
+  */
   checkErr(err, "ComamndQueue::enqueueReadBuffer()");
 
   std::cout<<"Kernel finished executing."<< std::endl;
