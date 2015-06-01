@@ -28,14 +28,19 @@ typedef struct _Intersection{
 } Intersection;
 
 // Returns a normalized vector corresponding to the camera context and screen position.
-float3 shootVector( int2 screen, Camera* cam )
+float3 shoot_ray( float2 screen, Camera* cam )
 {
 
-  return (float3)(0.0f,0.0f,0.0f);
+  float z = 1.0f; // Assume unit Z Depth.
 
+  float3 vCompY = vLookAt * z + vUp * z * screen.y;
+  float3 vCompX = vLookAt * z + cross( vUp, vLookAt ) * screen.x;
+
+  return normalize( vCompX + vCompY );
 }
 
-Intersection ray_intersect( float3 vPos, float3 vDir, Sphere* pSphere ){
+Intersection ray_intersect( float3 vPos, float3 vDir, Sphere* pSphere )
+{
   // For now calculate line distance to each sphere and get the nearest intersection.
 }
 
@@ -48,12 +53,12 @@ __kernel void path_trace( __global Sphere* pObjects, __global Camera* pCamera, _
   // Normalized coords.
    float xf = ((float)x)/1920.0f;
    float yf = ((float)y)/1080.0f;
+   float2 screen = ( xf, yf );
+
+   shoot_ray( screen, pCamera );
 
    float xt = ( xf*2.0 - 1.0f );
    float yt = yf*2.0 - 1.0f;
-
-   float mag = 1.0f;
-
 
    // Note: no samplers have been used so indexing is directly through integers.
    write_imagef( imgOut, (int2)(x,y), (float4)( xf , yf, 0.0f, 1.0f ) );
