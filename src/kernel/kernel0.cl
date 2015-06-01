@@ -3,28 +3,45 @@
 __constant sampler_t sampler =  CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;
 
 
-typedef struct _Camera{
+typedef struct _Camera
+{
   float3 vPos;
   float3 vLookAt;
   float3 vUp;
+
 } Camera;
 
-typedef struct _Object{
-  uint uType;
-  uint uPrimitive;
-} Object;
-
 // Primitive types and listings
-typedef struct _Sphere{
+typedef struct _Sphere
+{
+
   float3 vPos;
+  float fRadius;
+
 } Sphere;
 
+typedef struct _Intersection{
+
+  float3 vPos;
+  Sphere* pSphere;
+
+} Intersection;
+
 // Returns a normalized vector corresponding to the camera context and screen position.
-float3 shootVector( int2 screen, Camera* cam ){
+float3 shootVector( int2 screen, Camera* cam )
+{
+
   return (float3)(0.0f,0.0f,0.0f);
+
 }
 
-__kernel void square(__global float * out, __global float * in, __write_only image2d_t imgOut) {
+Intersection ray_intersect( float3 vPos, float3 vDir, Sphere* pSphere ){
+  // For now calculate line distance to each sphere and get the nearest intersection.
+}
+
+
+__kernel void path_trace( __global Sphere* pObjects, __global Camera* pCamera, __write_only image2d_t imgOut )
+{
    size_t x = get_global_id(0);
    size_t y = get_global_id(1);
 
