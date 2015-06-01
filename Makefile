@@ -24,28 +24,29 @@ all: $(BINDIR)/test
 $(BINDIR)/test: $(OBJDIR)/renderer/main.o \
 								$(OBJDIR)/geometry/object.o \
 								$(OBJDIR)/assets/texture.o \
-								$(OBJDIR)/renderer/render_target.o
+								$(OBJDIR)/renderer/render_target.o \
+								$(OBJDIR)/renderer/camera.o
+
 	g++ -o $@ $^ $(LDFLAGS)
 
 $(OBJDIR)/renderer/main.o: $(SRCDIR)/renderer/main.cpp
+	g++ -o $@ -c $< $(CCFLAGS)
 
+$(OBJDIR)/renderer/camera.o: $(SRCDIR)/renderer/camera.cpp
 	g++ -o $@ -c $< $(CCFLAGS)
 
 $(OBJDIR)/geometry/object.o: $(SRCDIR)/geometry/object.cpp
-
 	g++ -o $@ -c $< $(CCFLAGS)
 
 $(OBJDIR)/assets/texture.o: $(SRCDIR)/assets/texture.cpp
-
 	g++ -o $@ -c $< $(CCFLAGS)
 
 $(OBJDIR)/renderer/render_target.o: $(SRCDIR)/renderer/render_target.cpp
-
 	g++ -o $@ -c $< $(CCFLAGS)
 
 
 .PHONY: all clean
 
 clean:
-	rm *.o
-	rm test
+	rm $(OBJDIR)/*.o
+	rm $(BINDIR)/*
