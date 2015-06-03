@@ -36,7 +36,7 @@ $(OBJDIR)/renderer/main.o: $(SRCDIR)/renderer/main.cpp
 $(OBJDIR)/renderer/camera.o: $(SRCDIR)/renderer/camera.cpp
 	g++ -o $@ -c $< $(CCFLAGS)
 
-$(OBJDIR)/geometry/sphere.o: $(SRCDIR)/geometry/sphere.cpp
+$(OBJDIR)/geometry/primitives.o: $(SRCDIR)/geometry/primitives.cpp
 	g++ -o $@ -c $< $(CCFLAGS)
 
 $(OBJDIR)/assets/texture.o: $(SRCDIR)/assets/texture.cpp

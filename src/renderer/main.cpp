@@ -222,18 +222,38 @@ int main(int argc, char** argv){
   pAccumulator = new RenderTarget( WIDTH, HEIGHT, GL_RGBA, GL_RGBA, GL_FLOAT, 0, false );
   checkGLErr( "RenderTarget::RenderTarget" );
 
-  const int inSize = 1;
+  const int inSizeS = 1;
+  const int inSizeT = 1;
+  const int inSizeP = 1;
+
   /*
   float* outH = new float[inSize];
   cl::Buffer outCL( context, CL_MEM_WRITE_ONLY, inSize * sizeof( float ) );
   */
-  Sphere* spheres = new Sphere[inSize];
+  Sphere* spheres = new Sphere[inSizeS];
   std::cout<<"Sphere: "<< spheres[0].radius << "\n";
 
-  cl::Buffer clSpheres( context, CL_MEM_READ_ONLY, inSize * sizeof(Sphere));
+  Triangle* planes = new Plane[inSizeP];
+  //std::cout<<"Sphere: "<< planes[0].radius << "\n";
+
+  Plane* triangles = new Triangle[inSizeT];
+  //std::cout<<"Sphere: "<< spheres[0].radius << "\n";
+
+  GeomteryDescriptor* geometry = new GeomteryDescriptor( inSizeS, inSizeP, inSizeT );
+
+  cl::Buffer clSpheres( context, CL_MEM_READ_ONLY, inSizeS * sizeof( Sphere ));
+  checkErr(err, "Buffer::Buffer()");
+
+  cl::Buffer clPlanes( context, CL_MEM_READ_ONLY, inSizeP * sizeof( Planes ) );
+  checkErr(err, "Buffer::Buffer()");
+
+  cl::Buffer clTriangles( context, CL_MEM_READ_ONLY, inSizeT * sizeof( Triangle ) );
   checkErr(err, "Buffer::Buffer()");
 
   cl::Buffer clCamera( context, CL_MEM_READ_ONLY, 1 * sizeof( CLCamera ) );
+  checkErr(err, "Buffer::Buffer()");
+
+  cl::Buffer clGeom( context, CL_MEM_READ_ONLY, 1 * sizeof( GeometryDescriptor ) );
   checkErr(err, "Buffer::Buffer()");
 
   cl::ImageGL imgGL( context, CL_MEM_READ_WRITE, GL_TEXTURE_2D, 0, pCLTarget->getColorTexture()->glGetInternalTexture(), &err );
@@ -273,14 +293,22 @@ int main(int argc, char** argv){
   cl::Kernel kernel(program, "path_trace", &err);
   checkErr(err, "Kernel::Kernel()");
 
-  err = kernel.setArg(0, clSpheres);
+  err = kernel.setArg(0, clCamera);
   checkErr(err, "Kernel::setArg()");
-  err = kernel.setArg(1, clCamera);
+  err = kernel.setArg(1, imgGL);
   checkErr(err, "Kernel::setArg()");
-  err = kernel.setArg(2, imgGL);
+  err = kernel.setArg(2, accGL);
   checkErr(err, "Kernel::setArg()");
-  err = kernel.setArg(3, accGL);
+
+  err = kernel.setArg(3, clSpheres);
   checkErr(err, "Kernel::setArg()");
+  err = kernel.setArg(4, clPlanes);
+  checkErr(err, "Kernel::setArg()");
+  err = kernel.setArg(5, clTriangles);
+  checkErr(err, "Kernel::setArg()");
+  err = kernel.setArg(6, clGeom);
+  checkErr(err, "Kernel::setArg()");
+
 
 
   std::cout<<"Built Kernel"<< std::endl;
@@ -306,7 +334,11 @@ int main(int argc, char** argv){
 
   std::cout<< sizeof( CLCamera )<< std::endl;
   queue.enqueueWriteBuffer( clCamera, CL_TRUE, 0, 1 * sizeof(CLCamera), (const void*)cam );
-  queue.enqueueWriteBuffer( clSpheres, CL_TRUE, 0, inSize * sizeof(Sphere), (const void*)spheres);
+  queue.enqueueWriteBuffer( clSpheres, CL_TRUE, 0, inSizeS * sizeof(Sphere), (const void*)spheres);
+  queue.enqueueWriteBuffer( clPlanes, CL_TRUE, 0, inSizeP * sizeof(Planes), (const void*)triangles);
+  queue.enqueueWriteBuffer( clTriangles, CL_TRUE, 0, inSizeT * sizeof(Triangle), (const void*)planes);
+  queue.enqueueWriteBuffer( clGeom, CL_TRUE, 0, 1 * sizeof(GeometryDescriptor), (const void*)geometry);
+
 
   vSharedUnits = new std::vector<cl::Memory>();
   vSharedUnits->push_back( imgGL );
