@@ -42,22 +42,21 @@ float4 shoot_ray( float2 screen, __global Camera* cam )
 
 }
 
-
-float getDiscriminant(float4 lStart, float4 lDir, Sphere sphere)
+float get_discriminant( float4 lStart, float4 lDir, __global Sphere* sphere, int i)
 {
-    float dot1 = dot(lDir, (lDir - sphere.vPos));
-    dot1 *= dot1;
-    float dist = dot(lDir - sphere.vPos,lDir - sphere.vPos);
-    return dot1 - dist + (sphere.fRadius*sphere.fRadius);
+    float dot1 = dot(lDir, (lStart - sphere[i].vPos));
+    dot1 = dot1 * dot1;
+    float dist = dot(lStart - sphere[i].vPos,lStart - sphere[i].vPos);
+    return dot1 - dist + (sphere[i].fRadius*sphere[i].fRadius);
 }
 
+// Intersect with all types of objects.
 Intersection ray_intersect( float4 vPos, float4 vDir, __global Sphere* pSphere, int maxSpheres )
 {
     Intersection vIntPoint;
     vIntPoint.iSphere = -1;
     vIntPoint.vPos = (float4)( 0.0f, 0.0f, 0.0f, 0.0f );
 
-    // AAAARGGGHHH... Y U name this INT instead of FLOAT? Took 3 HOURS to figure it out. :P
     float curDisc = 0.0f;
     //minDist = (float)1000000.0f;
     float minDist = 10000.0f;
@@ -69,30 +68,19 @@ Intersection ray_intersect( float4 vPos, float4 vDir, __global Sphere* pSphere, 
     //float distA, distB;
     for(int i=0;i < maxSpheres;i++)
     {
-        //curDisc = getDiscriminant(vPos,vDir,pSphere[i]);
+        curDisc = get_discriminant(vPos,vDir,pSphere,i);
 
-        float dot1 = dot(vDir, (vPos - pSphere[i].vPos));
-        dot1 = dot1 * dot1;
-        float dist = dot(vPos - pSphere[i].vPos,vPos - pSphere[i].vPos);
-        curDisc = dot1 - dist + (pSphere[i].fRadius*pSphere[i].fRadius);
-
-        //curDisc = -1.0f;
         if(curDisc < 0)
             continue;
 
         //i = 1;
         float distA = -(dot(vDir,vPos - pSphere[i].vPos)) - curDisc;
         float distB = distA + 2*curDisc;
-        //float distA = 1.0f;
-        //float distB = 1.5f;
+
         if(distA < 0)
             distA = minDist;
         if(distB < 0)
             distB = minDist;
-
-        //curDisc = 1;
-        //minDist = 1.0f;
-        //vIntPoint.iSphere = 0;
 
 
         if(distA < minDist)
@@ -110,12 +98,10 @@ Intersection ray_intersect( float4 vPos, float4 vDir, __global Sphere* pSphere, 
         }
     }
 
-
-
     return vIntPoint;
 }
 
-__kernel void path_trace( __global Sphere* pObjects, __global Camera* pCamera, __write_only image2d_t imgOut )
+__kernel void path_trace( __global Sphere* pObjects, __global Camera* pCamera, __write_only image2d_t imgOut, __read__only image2d_t imgIn )
 {
    size_t x = get_global_id(0);
    size_t y = get_global_id(1);
@@ -138,10 +124,18 @@ __kernel void path_trace( __global Sphere* pObjects, __global Camera* pCamera, _
    Intersection patch = ray_intersect( pCamera[0].vPos, ray, pObjects, 1 );
 
    float mag = 0.0f;
+
+   float4 col;
    if( patch.iSphere != -1 ){
-    mag = 1.0f;
+     float4 vec = patch.vPos - pObjects[patch.iSphere].vPos;
+
+     float mag = -dot( vec, pCamera[0].vLookAt );
+     //col = (float4)( vec.x * vec.x, vec.y * vec.y, vec.z * vec.z, 1.0f );
+     col = (float4)( mag, mag, mag, 1.0f );
+   }else{
+     col = (float4)( 0.0f, 0.0f, 0.0f, 0.0f );
    }
    // Note: no samplers have been used so indexing is directly through integers.
-   write_imagef( imgOut, (int2)(x,y), (float4)( mag, mag, mag, 1.0f ) );
+   write_imagef( imgOut, (int2)(x,y), col );
 
 }

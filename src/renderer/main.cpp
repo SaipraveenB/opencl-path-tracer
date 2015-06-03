@@ -44,6 +44,9 @@ GLFWwindow* window;
 // Main shared memory unit for rendering from OpenCL
 RenderTarget* pCLTarget;
 
+// Secondary shared memory to act as accumulator.
+RenderTarget* pAccumulator;
+
 // Vector of memory shared between OpenCL and OpenGL contexts.
 std::vector<cl::Memory>* vSharedUnits;
 
@@ -102,13 +105,23 @@ void mainLoop( cl::CommandQueue& queue, cl::Context& context, cl::Kernel kernel 
 
   eRelease.wait();
 
+
+  pAccumulator->glBind( GL_DRAW_FRAMEBUFFER );
+  checkGLErr( "glBind GL_DRAW_FRAMEBUFFER, Accumulator " );
+  pCLTarget->glBind( GL_READ_FRAMEBUFFER );
+  checkGLErr( "glBind GL_READ_FRAMEBUFFER, Main Target " );
+  glBlitFramebuffer( 0, 0, WIDTH, HEIGHT, 0, 0, WIDTH, HEIGHT, GL_COLOR_BUFFER_BIT, GL_NEAREST );
+  checkGLErr( "glBlitFramebuffer" );
+
   glBindFramebuffer( GL_DRAW_FRAMEBUFFER, 0 );
   checkGLErr( "glBind GL_DRAW_FRAMEBUFFER, 0 " );
   pCLTarget->glBind( GL_READ_FRAMEBUFFER );
   checkGLErr( "glBind GL_READ_FRAMEBUFFER, something " );
-
   glBlitFramebuffer( 0, 0, WIDTH, HEIGHT, 0, 0, WIDTH, HEIGHT, GL_COLOR_BUFFER_BIT, GL_NEAREST );
   checkGLErr( "glBlitFramebuffer" );
+
+
+
 
   glfwPollEvents();
 
@@ -206,6 +219,7 @@ int main(int argc, char** argv){
 
   // Create shared texture.
   pCLTarget = new RenderTarget( WIDTH, HEIGHT, GL_RGBA, GL_RGBA, GL_FLOAT, 0, false );
+  pAccumulator = new RenderTarget( WIDTH, HEIGHT, GL_RGBA, GL_RGBA, GL_FLOAT, 0, false );
   checkGLErr( "RenderTarget::RenderTarget" );
 
   const int inSize = 1;
@@ -217,14 +231,15 @@ int main(int argc, char** argv){
   std::cout<<"Sphere: "<< spheres[0].radius << "\n";
 
   cl::Buffer clSpheres( context, CL_MEM_READ_ONLY, inSize * sizeof(Sphere));
-
   checkErr(err, "Buffer::Buffer()");
+
   cl::Buffer clCamera( context, CL_MEM_READ_ONLY, 1 * sizeof( CLCamera ) );
-
   checkErr(err, "Buffer::Buffer()");
 
-  cl::ImageGL imgGL( context, CL_MEM_WRITE_ONLY, GL_TEXTURE_2D, 0, pCLTarget->getColorTexture()->glGetInternalTexture(), &err );
+  cl::ImageGL imgGL( context, CL_MEM_READ_WRITE, GL_TEXTURE_2D, 0, pCLTarget->getColorTexture()->glGetInternalTexture(), &err );
+  checkErr(err, "ImageGL::ImageGL()");
 
+  cl::ImageGL accGL( context, CL_MEM_READ_WRITE, GL_TEXTURE_2D, 0, pAccumulator->getColorTexture()->glGetInternalTexture(), &err );
   checkErr(err, "ImageGL::ImageGL()");
 
   std::cout<<"Created buffers."<< std::endl;
@@ -263,6 +278,8 @@ int main(int argc, char** argv){
   err = kernel.setArg(1, clCamera);
   checkErr(err, "Kernel::setArg()");
   err = kernel.setArg(2, imgGL);
+  checkErr(err, "Kernel::setArg()");
+  err = kernel.setArg(3, accGL);
   checkErr(err, "Kernel::setArg()");
 
 
