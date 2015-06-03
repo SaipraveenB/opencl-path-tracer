@@ -1,8 +1,13 @@
-#include "sphere.h"
+#include <geometry/sphere.h>
 
-Sphere::Sphere(float* cent, float rad)
+
+Sphere::Sphere(glm::vec4 center, float rad)
 {
-    this->center = new float[3];
-    memcpy(center,cent,3*sizeof(float));
+    this->center = center;
     this->radius = rad;
+}
+
+Sphere::Sphere(){
+    this->center = glm::vec4(0.0f,0.0f,0.0f,0.0f);
+    this->radius = 1.0f;
 }

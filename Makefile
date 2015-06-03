@@ -22,10 +22,11 @@ endif
 all: $(BINDIR)/test
 
 $(BINDIR)/test: $(OBJDIR)/renderer/main.o \
-								$(OBJDIR)/geometry/object.o \
+								$(OBJDIR)/geometry/sphere.o \
 								$(OBJDIR)/assets/texture.o \
 								$(OBJDIR)/renderer/render_target.o \
-								$(OBJDIR)/renderer/camera.o
+								$(OBJDIR)/renderer/camera.o \
+
 
 	g++ -o $@ $^ $(LDFLAGS)
 
@@ -35,7 +36,7 @@ $(OBJDIR)/renderer/main.o: $(SRCDIR)/renderer/main.cpp
 $(OBJDIR)/renderer/camera.o: $(SRCDIR)/renderer/camera.cpp
 	g++ -o $@ -c $< $(CCFLAGS)
 
-$(OBJDIR)/geometry/object.o: $(SRCDIR)/geometry/object.cpp
+$(OBJDIR)/geometry/sphere.o: $(SRCDIR)/geometry/sphere.cpp
 	g++ -o $@ -c $< $(CCFLAGS)
 
 $(OBJDIR)/assets/texture.o: $(SRCDIR)/assets/texture.cpp
@@ -48,5 +49,7 @@ $(OBJDIR)/renderer/render_target.o: $(SRCDIR)/renderer/render_target.cpp
 .PHONY: all clean
 
 clean:
-	rm $(OBJDIR)/*.o
+	rm $(OBJDIR)/renderer/*.o
+	rm $(OBJDIR)/assets/*.o
+	rm $(OBJDIR)/geometry/*.o
 	rm $(BINDIR)/*

@@ -5,6 +5,8 @@ OpenCL entry point
 #include <OpenGL/OpenGL.h>
 #include <assets/texture.h>
 #include <renderer/render_target.h>
+#include <renderer/camera.h>
+#include <geometry/sphere.h>
 
 #include <CL/cl.hpp>
 
@@ -16,7 +18,7 @@ OpenCL entry point
 #include <iterator>
 #include <time.h>
 
-#include "sphere.h"
+
 
 #define WIDTH 1920
 #define HEIGHT 1080
@@ -45,6 +47,8 @@ RenderTarget* pCLTarget;
 // Vector of memory shared between OpenCL and OpenGL contexts.
 std::vector<cl::Memory>* vSharedUnits;
 
+// Camera class to control movement through the scene.
+ModelCamera* pCamera;
 
 int iFrameCount = 0;
 float fFrameAverage = 0.0f;
@@ -150,6 +154,8 @@ int main(int argc, char** argv){
   #endif
 
 
+
+
   window = glfwCreateWindow (WIDTH, HEIGHT, "Hello Triangle", NULL, NULL);
   if (!window) {
     fprintf (stderr, "ERROR: could not open window with GLFW3\n");
@@ -168,6 +174,8 @@ int main(int argc, char** argv){
   glewInit();
   glGetError();
   //checkGLErr( "GLEW init" );
+
+
 
   // END OPENGL INIT..
 
@@ -200,16 +208,18 @@ int main(int argc, char** argv){
   pCLTarget = new RenderTarget( WIDTH, HEIGHT, GL_RGBA, GL_RGBA, GL_FLOAT, 0, false );
   checkGLErr( "RenderTarget::RenderTarget" );
 
-  const int inSize = 2000000;
+  const int inSize = 1;
   /*
   float* outH = new float[inSize];
   cl::Buffer outCL( context, CL_MEM_WRITE_ONLY, inSize * sizeof( float ) );
   */
   Sphere* spheres = new Sphere[inSize];
-  cl::Buffer clSpheres( context, CL_MEM_WRITE_ONLY, inSize * sizeof(Sphere));
+  std::cout<<"Sphere: "<< spheres[0].radius << "\n";
+
+  cl::Buffer clSpheres( context, CL_MEM_READ_ONLY, inSize * sizeof(Sphere));
 
   checkErr(err, "Buffer::Buffer()");
-  cl::Buffer clCamera( context, CL_MEM_READ_ONLY, inSize * sizeof( float ) );
+  cl::Buffer clCamera( context, CL_MEM_READ_ONLY, 1 * sizeof( CLCamera ) );
 
   checkErr(err, "Buffer::Buffer()");
 
@@ -245,7 +255,7 @@ int main(int argc, char** argv){
   checkErr(err, "Program::build()");
   std::cout<<"Built program"<< std::endl;
 
-  cl::Kernel kernel(program, "square", &err);
+  cl::Kernel kernel(program, "path_trace", &err);
   checkErr(err, "Kernel::Kernel()");
 
   err = kernel.setArg(0, clSpheres);
@@ -258,12 +268,28 @@ int main(int argc, char** argv){
 
   std::cout<<"Built Kernel"<< std::endl;
 
+  pCamera = new ModelCamera( window );
+  pCamera->setSpeedX( 0.1f );
+  pCamera->setSpeedY( 0.1f );
+
+  pCamera->setRadius( 5.0f );
+  pCamera->setOrientation( glm::vec3( 0.0f, -1.0f, 0.0f ) );
+  pCamera->reset( glm::vec3( 0.0f, 0.0f, -1.0f ) );
+
 
   cl::CommandQueue queue(context, devices[0], 0, &err);
   checkErr(err, "CommandQueue::CommandQueue()");
+  CLCamera* cam = pCamera->getCLCamera();
 
-  queue.enqueueWriteBuffer( clCamera, CL_TRUE, 0, inSize * sizeof(float), f);
-  queue.enqueueWriteBuffer( clSpheres, CL_TRUE, 0, inSize * sizeof(Sphere), f);
+  std::cout<<cam->vPos.x<<","<<cam->vPos.y<<","<<cam->vPos.z<<std::endl;
+
+  std::cout<<cam->vLookAt.x<<","<<cam->vLookAt.y<<","<<cam->vLookAt.z<<std::endl;
+
+  std::cout<<cam->vUp.x<<","<<cam->vUp.y<<","<<cam->vUp.z<<std::endl;
+
+  std::cout<< sizeof( CLCamera )<< std::endl;
+  queue.enqueueWriteBuffer( clCamera, CL_TRUE, 0, 1 * sizeof(CLCamera), (const void*)cam );
+  queue.enqueueWriteBuffer( clSpheres, CL_TRUE, 0, inSize * sizeof(Sphere), (const void*)spheres);
 
   vSharedUnits = new std::vector<cl::Memory>();
   vSharedUnits->push_back( imgGL );

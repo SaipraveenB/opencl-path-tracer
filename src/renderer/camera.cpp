@@ -75,8 +75,9 @@ void ModelCamera::glfwHandleCursor(){
 }
 
 CLCamera* ModelCamera::getCLCamera(){
-  return new CLCamera( vPos, vLookAt, vUp );
-}
-
-CLCamera::CLCamera( glm::vec3 vPos, glm::vec3 vLookAt, glm::vec3 vUp ):vPos(vPos),vUp(vUp),vLookAt(vLookAt){
+  CLCamera *cam =  new CLCamera();
+  cam->vPos = glm::vec4(vPos, 0.0f);
+  cam->vUp = glm::vec4(vUp, 0.0f);
+  cam->vLookAt = glm::vec4(vLookAt, 0.0f);
+  return cam;
 }

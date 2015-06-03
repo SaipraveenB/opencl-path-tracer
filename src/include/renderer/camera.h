@@ -1,6 +1,14 @@
 #include <stdgl.h>
 
 
+
+
+struct CLCamera{
+  glm::vec4 vPos;
+  glm::vec4 vLookAt;
+  glm::vec4 vUp;
+};
+
 class ModelCamera{
   // Two normalized vectors define direction.
   // Three component vector..  but it's normalized hence only two degrees of freedom
@@ -36,11 +44,5 @@ public:
   void reset( glm::vec3 );
   glm::mat4 getViewMatrix();
   void glfwHandleCursor();
-  CLCamera getCLCamera();
-};
-
-class CLCamera{
-public:
-  glm::vec3 vUp, vLookAt, vPos;
-  CLCamera::CLCamera( glm::vec3, glm::vec3, glm::vec3 );
+  CLCamera* getCLCamera();
 };
