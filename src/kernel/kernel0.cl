@@ -28,6 +28,14 @@ typedef struct _Intersection{
 
 } Intersection;
 
+typedef struct __Triangle
+{
+    //CCW naming. Right bottom vertex is a.
+    float4 a;
+    float4 b;
+    float4 c;
+} Triangle;
+
 // Returns a normalized vector corresponding to the camera context and screen position.
 float4 shoot_ray( float2 screen, __global Camera* cam )
 {
@@ -42,13 +50,70 @@ float4 shoot_ray( float2 screen, __global Camera* cam )
 
 }
 
-
+float4 getNormal(Sphere sphere, Intersection pt)
+{
+    return (pt.vPos - sphere.vPos);
+}
 float getDiscriminant(float4 lStart, float4 lDir, Sphere sphere)
 {
-    float dot1 = dot(lDir, (lDir - sphere.vPos));
+    float dot1 = dot(lDir, (lStart - sphere.vPos));
     dot1 *= dot1;
-    float dist = dot(lDir - sphere.vPos,lDir - sphere.vPos);
+    float dist = dot(lStart - sphere.vPos,lStart - sphere.vPos);
     return dot1 - dist + (sphere.fRadius*sphere.fRadius);
+
+}
+
+Intersection rayPlaneIntersect( float4 plane, float4 vPos, float4 vDir)
+{
+    //Plane equation is ax + by + cz + d = 0.
+    //Line equation is A + t.D = X
+
+    float4 norm ;
+    Intersection intPoint;
+    float mag = sqrt(plane.x*plane.x + plane.y*plane.y + plane.z*plane.z);
+    norm.x = plane.x/mag;
+    norm.y = plane.y/mag;
+    norm.z = plane.z/mag;
+    norm.w = 0;
+    vPos.w = 0;
+    float val = dot(norm,vDir);
+    if(val == 0)
+    {
+        intPoint.iSphere = 0;
+        return intPoint;
+    }
+    intPoint.iSphere = 1;
+    float dist = (-1*plane.w - dot(vPos,nor))/val;
+    intPoint.vPos = vPos + dist*vDir;
+    intPoint.vDir = norm;
+}
+
+Intersection rayTriangleIntersect(Triangle delta, float4 vPos, float4 vDir)
+{
+    Intersection intPoint;
+    intPoint.iSphere = 0;
+    float4 normal = normalize(corss(delta.b - delta.a, delta.c - delta.a));
+    float val = dot(vDir,normal);
+
+    if(val == 0)
+        return intPoint;
+
+    float lineDist = dot(delta.a - vPos,normal)/val;
+    float4 point = vPos + lineDist*vDir;
+
+    //Check if the point lies inside the triangle.
+    float dotA = dot(cross(point-delta.a,delta.c-delta.a),normal);
+    float dotC = dot(cross(point-delta.c,delta.b-delta.c),normal);
+    float dotC = dot(cross(point-delta.b,delta.a-delta.b),normal);
+
+    //Either of the 3 dot products is negative if point is outside traingle.
+    if(dotA <0 || dotB < 0 || dotC < 0)
+        return intPoint;
+
+    intPoint.iSphere = 1;
+    intPoint.vPos = point;
+
+    return intPoint;
 }
 
 Intersection ray_intersect( float4 vPos, float4 vDir, __global Sphere* pSphere, int maxSpheres )
