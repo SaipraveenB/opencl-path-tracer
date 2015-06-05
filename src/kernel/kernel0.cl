@@ -1,4 +1,8 @@
 #pragma OPENCL EXTENSION cl_khr_byte_addressable_store : enable
+#define PIX_X 0
+#define PIX_Y 0
+
+#define log(x) if( PIX_X == get_global_id(0) && PIX_Y == get_global_id(1) ) printf(x);
 
 __constant sampler_t sampler =  CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;
 
@@ -32,13 +36,14 @@ typedef struct _FullIntersection{
   Intersection kInter;
   uint uPrimType;
   int uIndex;
+  float4 vDir;
   // Put other stuff like BRDF, normals, texture coords etc. here,
   // to be calculated by ray_intersect after determining the hit.
 
 } FullIntersection;
 
 typedef struct _GeometryDescriptor{
-  int numSphere;
+  int numSpheres;
   int numTriangles;
   int numPlanes;
 } GeometryDescriptor;
@@ -87,17 +92,17 @@ float4 getNormal( __global Sphere* sphere, int i, float4 vPos )
     return normalize( vPos - sphere[i].vPos);
 }
 
-Intersection rayPlaneIntersect( __global Plane* plane, int i, float4 vPos, float4 vDir)
+Intersection rayPlaneIntersect(  float4 vPos, float4 vDir, __global Plane* plane, int i )
 {
     //Plane equation is ax + by + cz + d = 0.
     //Line equation is A + t.D = X
 
-    float4 norm ;
+    /*float4 norm ;
     Intersection intPoint;
-    float mag = sqrt(plane[i].x*plane[i].x + plane[i].y*plane[i].y + plane[i].z*plane[i].z);
-    norm.x = plane[i].x/mag;
-    norm.y = plane[i].y/mag;
-    norm.z = plane[i].z/mag;
+    float mag = plane[i
+    norm.x = plane[i].normal.x/mag;
+    norm.y = plane[i].normal.y/mag;
+    norm.z = plane[i].normal.z/mag;
     norm.w = 0;
     vPos.w = 0;
     float val = dot(norm,vDir);
@@ -107,27 +112,31 @@ Intersection rayPlaneIntersect( __global Plane* plane, int i, float4 vPos, float
         return intPoint;
     }
     intPoint.bInter = 1;
-    float dist = (-1*plane[i].w - dot(vPos,nor))/val;
+    float dist = (-1*plane[i].point.w - dot(vPos,norm))/val;
     intPoint.vPos = vPos + dist*vDir;
-    intPoint.vDir = norm;
+    intPoint.vDir = norm;*/
+    Intersection x;
+    x.vPos = (float4)(0,0,0,0);
+    x.vDir = (float4)(0,0,0,0);
+    return x;
 }
 
-Intersection rayTriangleIntersect( __global Triangle* delta, int i, float4 vPos, float4 vDir)
+Intersection rayTriangleIntersect(  float4 vPos, float4 vDir, __global Triangle* delta, int i )
 {
     Intersection intPoint;
     intPoint.bInter = 0;
-    float4 normal = normalize(corss(delta[i].b - delta[i].a, delta[i].c - delta[i].a));
+    float4 normal = normalize(cross(delta[i].b - delta[i].a, delta[i].c - delta[i].a));
     float val = dot(vDir,normal);
 
     if(val == 0)
         return intPoint;
 
-    float lineDist = dot(delta.a - vPos,normal)/val;
+    float lineDist = dot(delta[i].a - vPos,normal)/val;
     float4 point = vPos + lineDist*vDir;
 
     //Check if the point lies inside the triangle.
     float dotA = dot(cross(point-delta[i].a,delta[i].c-delta[i].a),normal);
-    float dotC = dot(cross(point-delta[i].c,delta[i].b-delta[i].c),normal);
+    float dotB = dot(cross(point-delta[i].c,delta[i].b-delta[i].c),normal);
     float dotC = dot(cross(point-delta[i].b,delta[i].a-delta[i].b),normal);
 
     //Either of the 3 dot products is negative if point is outside traingle.
@@ -146,35 +155,36 @@ Intersection raySphereIntersect( float4 vPos, float4 vDir, __global Sphere* pSph
   vIntPoint.bInter = 0;
   vIntPoint.vPos = (float4)( 0.0f, 0.0f, 0.0f, 0.0f );
 
-  curDisc = get_discriminant(vPos,vDir,pSphere,i);
+  float curDisc = get_discriminant(vPos,vDir,pSphere,i);
 
   if(curDisc < 0)
-      continue;
+      return vIntPoint;
 
   //i = 1;
   float distA = -(dot(vDir,vPos - pSphere[i].vPos)) - curDisc;
   float distB = distA + 2*curDisc;
 
   if( distA < 0 && distB < 0 )
-      continue;
+      return vIntPoint;
 
 
   if( distB < 0 || distA < distB)
   {
-      minDist = distA;
+      //minDist = distA;
       vIntPoint.bInter = 1;
       vIntPoint.vPos = vPos + distA * vDir;
-      vIntPoint.vDir = getNormal( pSphere, i, vIntPoint.vPos );
+      //vIntPoint.vDir = getNormal( pSphere, i, vIntPoint.vPos );
   }
 
   if( distA < 0 || distB < distA)
   {
-      minDist = distB;
+      //minDist = distB;
       vIntPoint.bInter = 1;
       vIntPoint.vPos = vPos + distB * vDir;
-      vIntPoint.vDir = getNormal( pSphere, i, vIntPoint.vPos );
+      //vIntPoint.vDir = getNormal( pSphere, i, vIntPoint.vPos );
   }
 
+  return vIntPoint;
 }
 
 // Intersect with all types of objects.
@@ -192,7 +202,7 @@ FullIntersection ray_intersect( float4 vPos, float4 vDir, __global Sphere* pSphe
 
     Intersection inter;
 
-    float minDist = 10000.0f;
+    //float minDist = 10000.0f;
 
     float primType = -1;
     float index = -1;
@@ -200,8 +210,8 @@ FullIntersection ray_intersect( float4 vPos, float4 vDir, __global Sphere* pSphe
     //float distA, distB;
     for(int i=0;i < pDescriptor[0].numSpheres;i++)
     {
-
       inter = raySphereIntersect( vPos, vDir, pSpheres, i );
+      //printf("%d, %d: Sphere: %d\n", get_global_id(0), get_global_id(1), inter.bInter);
       if( inter.bInter != 0 ){
         float dist = dot( inter.vPos, vDir );
         if( dist < minDist ){
@@ -216,6 +226,7 @@ FullIntersection ray_intersect( float4 vPos, float4 vDir, __global Sphere* pSphe
     for(int i=0;i < pDescriptor[0].numPlanes;i++)
     {
       inter = rayPlaneIntersect( vPos, vDir, pPlanes, i );
+      //printf("%d, %d: Plane: %d\n", get_global_id(0), get_global_id(1), inter.bInter);
       if( inter.bInter != 0 ){
         float dist = dot( inter.vPos, vDir );
         if( dist < minDist ){
@@ -229,6 +240,7 @@ FullIntersection ray_intersect( float4 vPos, float4 vDir, __global Sphere* pSphe
     for(int i=0;i < pDescriptor[0].numTriangles;i++)
     {
       inter = rayTriangleIntersect( vPos, vDir, pTriangles, i );
+      //printf("%d, %d: Triangle: %d\n", get_global_id(0), get_global_id(1), inter.bInter);
       if( inter.bInter != 0 ){
         float dist = dot( inter.vPos, vDir );
         if( dist < minDist ){
@@ -246,11 +258,11 @@ FullIntersection ray_intersect( float4 vPos, float4 vDir, __global Sphere* pSphe
     full.kInter = inter;
 
     // To find the normal.
-    if( full.uType == 0 ){
+    if( full.uPrimType == 0 ){
       full.vDir = normalize( pSpheres[full.uIndex].vPos - full.kInter.vPos );
-    }else if( full.uType == 1){
+    }else if( full.uPrimType == 1){
       full.vDir = pPlanes[full.uIndex].normal;
-    }else if( full.uType == 2){
+    }else if( full.uPrimType == 2){
       int index = full.uIndex;
       full.vDir = normalize( cross( pTriangles[index].a - pTriangles[index].b, pTriangles[index].b - pTriangles[index].c ) );
     }
@@ -271,7 +283,7 @@ FullIntersection ray_intersect( float4 vPos, float4 vDir, __global Sphere* pSphe
 */
 __kernel void path_trace( __global Camera* pCamera,
                           __write_only image2d_t imgOut,
-                          __read__only image2d_t imgIn,
+                          __read_only image2d_t imgIn,
                           __global Sphere* pSpheres,
                           __global Triangle* pTriangles,
                           __global Plane* pPlanes,
@@ -279,31 +291,39 @@ __kernel void path_trace( __global Camera* pCamera,
 {
    size_t x = get_global_id(0);
    size_t y = get_global_id(1);
-
+   if( x == 0 && y == 0 )
+    printf("X,Y: %d, %d\n", x, y);
   // Normalized coords.
-   float xf = ((float)x)/1920.0f;
-   float yf = ((float)y)/1080.0f;
+   float xf = ((float)x)/320.0f;
+   float yf = ((float)y)/240.0f;
 
-   float xt = (xf*2.0 - 1.0f) * (1920.0f / 1080.0f);
+   float xt = (xf*2.0 - 1.0f) * (320.0f / 240.0f);
    float yt = yf*2.0 - 1.0f;
 
    float2 screen = (float2)( xt, yt );
 
-   // Shoot ray through screen.
    float4 ray = (shoot_ray( screen, pCamera ));
-   //float4 ray = cross( pCamera[0].vUp, pCamera[0].vLookAt );
-   //ray = ray * sign( ray );
-   //ray = pCamera[0].vUp;
 
    FullIntersection patch = ray_intersect( pCamera[0].vPos, ray, pSpheres, pPlanes, pTriangles, pDesc );
 
-   if( patch.inter.bInter ){
-     col = 1.0f;
-   }
+   float4 col;
+   if( patch.kInter.bInter ){
+     //float mag = distance( patch.kInter.vPos, pCamera[0].vPos )/10.0f;
+     //col = (float4)(mag, mag, mag, 1.0f);
+    if( patch.uPrimType == 0 )
+        col = (float4)( 0.0f, 1.0f, 0.0f, 0.0f );
+    else if( patch.uPrimType == 1 )
+        col = (float4)( 1.0f, 0.0f, 0.0f, 0.0f );
+    else if( patch.uPrimType == 2 )
+        col = (float4)( 0.0f, 0.0f, 1.0f, 0.0f );
 
+   }else{
+     col = (float4)( 1,0,0,1 );
+   }
+    
+   col = (float4)( pDesc[0].numSpheres, pDesc[0].numPlanes, pDesc[0].numTriangles, 1.0f );
    float mag = 0.0f;
 
-   float4 col;
    /*if( patch.bInter != -1 ){
      float4 vec = patch.vPos - pObjects[patch.bInter].vPos;
 

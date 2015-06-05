@@ -22,7 +22,7 @@ endif
 all: $(BINDIR)/test
 
 $(BINDIR)/test: $(OBJDIR)/renderer/main.o \
-								$(OBJDIR)/geometry/sphere.o \
+								$(OBJDIR)/geometry/primitives.o \
 								$(OBJDIR)/assets/texture.o \
 								$(OBJDIR)/renderer/render_target.o \
 								$(OBJDIR)/renderer/camera.o \

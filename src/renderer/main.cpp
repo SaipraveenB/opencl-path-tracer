@@ -6,7 +6,7 @@ OpenCL entry point
 #include <assets/texture.h>
 #include <renderer/render_target.h>
 #include <renderer/camera.h>
-#include <geometry/sphere.h>
+#include <geometry/primitives.h>
 
 #include <CL/cl.hpp>
 
@@ -17,11 +17,12 @@ OpenCL entry point
 #include <string>
 #include <iterator>
 #include <time.h>
+#include <unistd.h>
 
 
 
-#define WIDTH 1920
-#define HEIGHT 1080
+#define WIDTH 320
+#define HEIGHT 240
 #define FPS_INTERVAL 0.5
 
 inline void checkErr(cl_int err, const char * name) {
@@ -233,18 +234,18 @@ int main(int argc, char** argv){
   Sphere* spheres = new Sphere[inSizeS];
   std::cout<<"Sphere: "<< spheres[0].radius << "\n";
 
-  Triangle* planes = new Plane[inSizeP];
+  Plane* planes = new Plane[inSizeP];
   //std::cout<<"Sphere: "<< planes[0].radius << "\n";
 
-  Plane* triangles = new Triangle[inSizeT];
+  Triangle* triangles = new Triangle[inSizeT];
   //std::cout<<"Sphere: "<< spheres[0].radius << "\n";
 
-  GeomteryDescriptor* geometry = new GeomteryDescriptor( inSizeS, inSizeP, inSizeT );
+  GeometryDescriptor* geometry = new GeometryDescriptor( inSizeS, inSizeP, inSizeT );
 
   cl::Buffer clSpheres( context, CL_MEM_READ_ONLY, inSizeS * sizeof( Sphere ));
   checkErr(err, "Buffer::Buffer()");
 
-  cl::Buffer clPlanes( context, CL_MEM_READ_ONLY, inSizeP * sizeof( Planes ) );
+  cl::Buffer clPlanes( context, CL_MEM_READ_ONLY, inSizeP * sizeof( Plane ) );
   checkErr(err, "Buffer::Buffer()");
 
   cl::Buffer clTriangles( context, CL_MEM_READ_ONLY, inSizeT * sizeof( Triangle ) );
@@ -264,10 +265,10 @@ int main(int argc, char** argv){
 
   std::cout<<"Created buffers."<< std::endl;
 
-  float *f = new float[inSize];
+  /*float *f = new float[inSize];
   for( int i = 0; i < inSize; i++ ){
     f[i] = i;
-  }
+  }*/
 
   std::vector<cl::Device> devices;
   devices = context.getInfo<CL_CONTEXT_DEVICES>();
@@ -335,7 +336,7 @@ int main(int argc, char** argv){
   std::cout<< sizeof( CLCamera )<< std::endl;
   queue.enqueueWriteBuffer( clCamera, CL_TRUE, 0, 1 * sizeof(CLCamera), (const void*)cam );
   queue.enqueueWriteBuffer( clSpheres, CL_TRUE, 0, inSizeS * sizeof(Sphere), (const void*)spheres);
-  queue.enqueueWriteBuffer( clPlanes, CL_TRUE, 0, inSizeP * sizeof(Planes), (const void*)triangles);
+  queue.enqueueWriteBuffer( clPlanes, CL_TRUE, 0, inSizeP * sizeof(Plane), (const void*)triangles);
   queue.enqueueWriteBuffer( clTriangles, CL_TRUE, 0, inSizeT * sizeof(Triangle), (const void*)planes);
   queue.enqueueWriteBuffer( clGeom, CL_TRUE, 0, 1 * sizeof(GeometryDescriptor), (const void*)geometry);
 
@@ -346,9 +347,10 @@ int main(int argc, char** argv){
   //Initialise counter.
 
   cLast = clock();
-  while( !glfwWindowShouldClose( window ) ){
+  //while( !glfwWindowShouldClose( window ) ){
+    //usleep( 1000000 );
     mainLoop( queue, context, kernel );
-  }
+  //}
 
   /* Previous Program. Remove these if you think they are not required.
   float *fout = new float[inSize];
