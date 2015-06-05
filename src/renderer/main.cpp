@@ -1,8 +1,12 @@
 /*
 OpenCL entry point
 */
+
+#define GLFW_EXPOSE_NATIVE_GLX
+#define GLFW_EXPOSE_NATIVE_X11
+
 #include <stdgl.h>
-#include <OpenGL/OpenGL.h>
+#include <GLFW/glfw3native.h>
 #include <assets/texture.h>
 #include <renderer/render_target.h>
 #include <renderer/camera.h>
@@ -164,7 +168,7 @@ int main(int argc, char** argv){
   // Otherwise we're stuck at 2.1
   std::cout<<"Apple FTW\n";
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_GL_TRUE);
   #endif
 
 
@@ -184,7 +188,7 @@ int main(int argc, char** argv){
   glfwMakeContextCurrent (window);
   checkGLErr( "glfwMakeContextCurrent" );
   // start GLEW extension handler
-  glewExperimental = TRUE;
+  glewExperimental = GL_TRUE;
   glewInit();
   glGetError();
   //checkGLErr( "GLEW init" );
@@ -208,19 +212,32 @@ int main(int argc, char** argv){
   #ifdef __APPLE__
   CGLContextObj kCGLContext = CGLGetCurrentContext();
   CGLShareGroupObj kCGLShareGroup = CGLGetShareGroup(kCGLContext);
+  cl_context_properties cprops[6] = {CL_CONTEXT_PLATFORM, (cl_context_properties)(platformList[0])(),CL_CONTEXT_PROPERTY_USE_CGL_SHAREGROUP_APPLE , (cl_context_properties) kCGLShareGroup, 0, 0};
+  cl::Context context( CL_DEVICE_TYPE_CPU, cprops, NULL, NULL, &err);
   #endif
 
-  cl_context_properties cprops[6] = {CL_CONTEXT_PLATFORM, (cl_context_properties)(platformList[0])(),CL_CONTEXT_PROPERTY_USE_CGL_SHAREGROUP_APPLE , (cl_context_properties) kCGLShareGroup, 0, 0};
+  #ifdef __linux__
+    cl_platform_id platform;
+    err = clGetPlatformIDs(1, &platform, NULL);
+    cl_context_properties props[] =
+    {
+    	CL_GL_CONTEXT_KHR, (cl_context_properties)glfwGetGLXContext( window ),
+    	CL_GLX_DISPLAY_KHR, (cl_context_properties)glfwGetX11Display(),
+    	CL_CONTEXT_PLATFORM, (cl_context_properties)platform,
+    	0
+    };
+    cl::Context context( CL_DEVICE_TYPE_CPU, props, NULL, NULL, &err);
+  //cl::Context context = clCreateContextFromType(props, CL_DEVICE_TYPE_CPU, NULL, NULL, &err);
+  #endif
 
-  cl::Context context( CL_DEVICE_TYPE_CPU, cprops, NULL, NULL, &err);
 
   checkErr(err, "Context::Context()");
 
   std::cout<<"Created context."<< std::endl;
 
   // Create shared texture.
-  pCLTarget = new RenderTarget( WIDTH, HEIGHT, GL_RGBA, GL_RGBA, GL_FLOAT, 0, false );
-  pAccumulator = new RenderTarget( WIDTH, HEIGHT, GL_RGBA, GL_RGBA, GL_FLOAT, 0, false );
+  pCLTarget = new RenderTarget( WIDTH, HEIGHT, GL_RGBA, GL_RGBA, GL_FLOAT, 0, GL_FALSE );
+  pAccumulator = new RenderTarget( WIDTH, HEIGHT, GL_RGBA, GL_RGBA, GL_FLOAT, 0, GL_FALSE );
   checkGLErr( "RenderTarget::RenderTarget" );
 
   const int inSizeS = 1;

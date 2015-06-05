@@ -9,8 +9,8 @@ INCLDIR = src/include
 
 ifeq ($(UNAME), Linux)
 # Linux-based
-	LDFLAGS = -L/opt/AMDAPP/lib/x86_64 -lOpenCL
-	CCFLAGS = -I$(INCLDIR)
+	LDFLAGS = -L/opt/AMDAPP/lib/x86_64 -lOpenCL -lglfw3 -pthread -lGLU -lGL -lrt -lXrandr -lXxf86vm -lXcursor -lXi -lXinerama -lX11 -L/home/sauce/CL_LIB/lib -lMagick++ -lMagickCore
+	CCFLAGS = -I/opt/AMDAPP/include -I$(INCLDIR) -fopenmp -I/usr/include/ImageMagick
 endif
 
 ifeq ($(UNAME), Darwin)

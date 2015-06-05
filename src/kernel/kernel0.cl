@@ -58,7 +58,6 @@ typedef struct __Triangle
 
 typedef struct __Plane
 {
-    //CCW naming. Right bottom vertex is a.
     float4 normal;
     float4 pt;
 } Plane;
@@ -92,32 +91,19 @@ float4 getNormal( __global Sphere* sphere, int i, float4 vPos )
     return normalize( vPos - sphere[i].vPos);
 }
 
-Intersection rayPlaneIntersect(  float4 vPos, float4 vDir, __global Plane* plane, int i )
+Intersection rayPlaneIntersect( float4 vPos, float4 vDir, __global Plane* plane, int i )
 {
-    //Plane equation is ax + by + cz + d = 0.
-    //Line equation is A + t.D = X
-
-    /*float4 norm ;
-    Intersection intPoint;
-    float mag = plane[i
-    norm.x = plane[i].normal.x/mag;
-    norm.y = plane[i].normal.y/mag;
-    norm.z = plane[i].normal.z/mag;
-    norm.w = 0;
-    vPos.w = 0;
-    float val = dot(norm,vDir);
-    if(val == 0)
-    {
-        intPoint.bInter = 0;
-        return intPoint;
-    }
-    intPoint.bInter = 1;
-    float dist = (-1*plane[i].point.w - dot(vPos,norm))/val;
-    intPoint.vPos = vPos + dist*vDir;
-    intPoint.vDir = norm;*/
     Intersection x;
     x.vPos = (float4)(0,0,0,0);
     x.vDir = (float4)(0,0,0,0);
+
+    int angle = dot(vDir, plane[i].normal);
+    if(angle == 0)
+        return x;
+
+    x.vPos = dot(plane[i].pt - vPos, plane[i].normal);
+    x.vDir = plane[i].normal;
+
     return x;
 }
 
@@ -320,7 +306,7 @@ __kernel void path_trace( __global Camera* pCamera,
    }else{
      col = (float4)( 1,0,0,1 );
    }
-    
+
    col = (float4)( pDesc[0].numSpheres, pDesc[0].numPlanes, pDesc[0].numTriangles, 1.0f );
    float mag = 0.0f;
 
