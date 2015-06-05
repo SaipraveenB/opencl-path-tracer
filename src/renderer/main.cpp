@@ -6,6 +6,7 @@ OpenCL entry point
 #include <assets/texture.h>
 #include <renderer/render_target.h>
 #include <renderer/camera.h>
+#include <renderer/renderer.h>
 #include <geometry/primitives.h>
 
 #include <CL/cl.hpp>
@@ -21,8 +22,8 @@ OpenCL entry point
 
 
 
-#define WIDTH 320
-#define HEIGHT 240
+#define WIDTH 1280
+#define HEIGHT 720
 #define FPS_INTERVAL 0.5
 
 inline void checkErr(cl_int err, const char * name) {
@@ -54,6 +55,8 @@ std::vector<cl::Memory>* vSharedUnits;
 // Camera class to control movement through the scene.
 ModelCamera* pCamera;
 
+ImageDescriptor imgDesc;
+
 int iFrameCount = 0;
 float fFrameAverage = 0.0f;
 int iSamples = 0;
@@ -78,7 +81,7 @@ void handleFrameCounter(){
   }
 
 }
-void mainLoop( cl::CommandQueue& queue, cl::Context& context, cl::Kernel kernel ){
+void mainLoop( cl::CommandQueue& queue, cl::Context& context, cl::Kernel kernel, cl::Buffer clImgDesc){
   cl::Event eAcquire, eRelease, eExecute;
   cl_int err;
 
@@ -86,6 +89,8 @@ void mainLoop( cl::CommandQueue& queue, cl::Context& context, cl::Kernel kernel 
   glFinish();
   checkGLErr( "glFinish()" );
 
+  queue.enqueueWriteBuffer( clImgDesc, CL_TRUE, 0, 1 * sizeof(ImageDescriptor), (const void*)&imgDesc);
+  
   err = queue.enqueueAcquireGLObjects( vSharedUnits, NULL, &eAcquire );
   checkErr(err, "CommandQueue::enqueueAcquireGLObjects()");
 
@@ -103,9 +108,10 @@ void mainLoop( cl::CommandQueue& queue, cl::Context& context, cl::Kernel kernel 
   queue.finish();
   err = queue.enqueueReleaseGLObjects( vSharedUnits, NULL, &eRelease );
   checkErr(err, "CommandQueue::enqueueReleaseGLObjects()");
-
+ 
   eRelease.wait();
 
+  imgDesc.numSamples += 1;
 
   pAccumulator->glBind( GL_DRAW_FRAMEBUFFER );
   checkGLErr( "glBind GL_DRAW_FRAMEBUFFER, Accumulator " );
@@ -220,6 +226,7 @@ int main(int argc, char** argv){
 
   // Create shared texture.
   pCLTarget = new RenderTarget( WIDTH, HEIGHT, GL_RGBA, GL_RGBA, GL_FLOAT, 0, false );
+  checkGLErr( "RenderTarget::RenderTarget" );
   pAccumulator = new RenderTarget( WIDTH, HEIGHT, GL_RGBA, GL_RGBA, GL_FLOAT, 0, false );
   checkGLErr( "RenderTarget::RenderTarget" );
 
@@ -257,10 +264,13 @@ int main(int argc, char** argv){
   cl::Buffer clGeom( context, CL_MEM_READ_ONLY, 1 * sizeof( GeometryDescriptor ) );
   checkErr(err, "Buffer::Buffer()");
 
-  cl::ImageGL imgGL( context, CL_MEM_READ_WRITE, GL_TEXTURE_2D, 0, pCLTarget->getColorTexture()->glGetInternalTexture(), &err );
+  cl::Buffer clImgDesc( context, CL_MEM_READ_ONLY, 1 * sizeof( ImageDescriptor ) );
+  checkErr(err, "Buffer::Buffer()");
+  
+  cl::ImageGL imgGL( context, CL_MEM_WRITE_ONLY, GL_TEXTURE_2D, 0, pCLTarget->getColorTexture()->glGetInternalTexture(), &err );
   checkErr(err, "ImageGL::ImageGL()");
 
-  cl::ImageGL accGL( context, CL_MEM_READ_WRITE, GL_TEXTURE_2D, 0, pAccumulator->getColorTexture()->glGetInternalTexture(), &err );
+  cl::ImageGL accGL( context, CL_MEM_READ_ONLY, GL_TEXTURE_2D, 0, pAccumulator->getColorTexture()->glGetInternalTexture(), &err );
   checkErr(err, "ImageGL::ImageGL()");
 
   std::cout<<"Created buffers."<< std::endl;
@@ -309,7 +319,8 @@ int main(int argc, char** argv){
   checkErr(err, "Kernel::setArg()");
   err = kernel.setArg(6, clGeom);
   checkErr(err, "Kernel::setArg()");
-
+  err = kernel.setArg(7, clImgDesc);
+  checkErr(err, "Kernel::setArg()");
 
 
   std::cout<<"Built Kernel"<< std::endl;
@@ -343,14 +354,16 @@ int main(int argc, char** argv){
 
   vSharedUnits = new std::vector<cl::Memory>();
   vSharedUnits->push_back( imgGL );
+  vSharedUnits->push_back( accGL );
 
   //Initialise counter.
+  imgDesc.numSamples = 0;
 
   cLast = clock();
-  //while( !glfwWindowShouldClose( window ) ){
+  while( !glfwWindowShouldClose( window ) ){
     //usleep( 1000000 );
-    mainLoop( queue, context, kernel );
-  //}
+    mainLoop( queue, context, kernel, clImgDesc );
+  }
 
   /* Previous Program. Remove these if you think they are not required.
   float *fout = new float[inSize];

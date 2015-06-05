@@ -1,8 +1,8 @@
 #pragma OPENCL EXTENSION cl_khr_byte_addressable_store : enable
-#define PIX_X 0
-#define PIX_Y 0
+#define PIX_X 640
+#define PIX_Y 360
 
-#define log(x) if( PIX_X == get_global_id(0) && PIX_Y == get_global_id(1) ) printf(x);
+#define cmdlog(x, ...) if( PIX_X == get_global_id(0) && PIX_Y == get_global_id(1) ) printf(x, __VA_ARGS__);
 
 __constant sampler_t sampler =  CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;
 
@@ -47,6 +47,10 @@ typedef struct _GeometryDescriptor{
   int numTriangles;
   int numPlanes;
 } GeometryDescriptor;
+
+typedef struct _ImageDescriptor{
+  int numSamples;
+} ImageDescriptor;
 
 typedef struct __Triangle
 {
@@ -154,7 +158,13 @@ Intersection raySphereIntersect( float4 vPos, float4 vDir, __global Sphere* pSph
   Intersection vIntPoint;
   vIntPoint.bInter = 0;
   vIntPoint.vPos = (float4)( 0.0f, 0.0f, 0.0f, 0.0f );
-
+    
+  /*cmdlog("vPos %f, %f, %f\n", vPos.x, vPos.y, vPos.z);
+  cmdlog("vDir %f, %f, %f\n", vDir.x, vDir.y, vDir.z);
+  cmdlog("i %d\n", i);
+  cmdlog("pSphere.vPos %f, %f, %f\n", pSphere[0].vPos.x, pSphere[0].vPos.y, pSphere[0].vPos.z);
+  cmdlog("pSphere.fRadius %f\n", pSphere[0].fRadius);*/
+  
   float curDisc = get_discriminant(vPos,vDir,pSphere,i);
 
   if(curDisc < 0)
@@ -184,6 +194,8 @@ Intersection raySphereIntersect( float4 vPos, float4 vDir, __global Sphere* pSph
       //vIntPoint.vDir = getNormal( pSphere, i, vIntPoint.vPos );
   }
 
+  //cmdlog("intPoint.vPos %f, %f, %f\n", vIntPoint.vPos.x, vIntPoint.vPos.y, vIntPoint.vPos.z);
+  //cmdlog("intPoint.bInter %d\n", vIntPoint.bInter);
   return vIntPoint;
 }
 
@@ -202,6 +214,8 @@ FullIntersection ray_intersect( float4 vPos, float4 vDir, __global Sphere* pSphe
 
     Intersection inter;
 
+    Intersection currInter;
+
     //float minDist = 10000.0f;
 
     float primType = -1;
@@ -212,10 +226,14 @@ FullIntersection ray_intersect( float4 vPos, float4 vDir, __global Sphere* pSphe
     {
       inter = raySphereIntersect( vPos, vDir, pSpheres, i );
       //printf("%d, %d: Sphere: %d\n", get_global_id(0), get_global_id(1), inter.bInter);
+      //cmdlog( "inter with %d: %d\n", i, inter.bInter );
       if( inter.bInter != 0 ){
-        float dist = dot( inter.vPos, vDir );
+        
+        float dist = distance( inter.vPos, vDir );
+        cmdlog( "dist: %f\n", dist  );
         if( dist < minDist ){
           minDist = dist;
+          currInter = inter;
           primType = 0;
           index = i;
         }
@@ -228,10 +246,11 @@ FullIntersection ray_intersect( float4 vPos, float4 vDir, __global Sphere* pSphe
       inter = rayPlaneIntersect( vPos, vDir, pPlanes, i );
       //printf("%d, %d: Plane: %d\n", get_global_id(0), get_global_id(1), inter.bInter);
       if( inter.bInter != 0 ){
-        float dist = dot( inter.vPos, vDir );
+        float dist = distance( inter.vPos, vDir );
         if( dist < minDist ){
           minDist = dist;
           primType = 1;
+          currInter = inter;
           index = i;
         }
       }
@@ -242,10 +261,11 @@ FullIntersection ray_intersect( float4 vPos, float4 vDir, __global Sphere* pSphe
       inter = rayTriangleIntersect( vPos, vDir, pTriangles, i );
       //printf("%d, %d: Triangle: %d\n", get_global_id(0), get_global_id(1), inter.bInter);
       if( inter.bInter != 0 ){
-        float dist = dot( inter.vPos, vDir );
+        float dist = distance( inter.vPos, vDir );
         if( dist < minDist ){
           minDist = dist;
           primType = 2;
+          currInter = inter;
           index = i;
         }
       }
@@ -255,7 +275,7 @@ FullIntersection ray_intersect( float4 vPos, float4 vDir, __global Sphere* pSphe
 
     full.uPrimType = primType;
     full.uIndex = index;
-    full.kInter = inter;
+    full.kInter = currInter;
 
     // To find the normal.
     if( full.uPrimType == 0 ){
@@ -271,7 +291,9 @@ FullIntersection ray_intersect( float4 vPos, float4 vDir, __global Sphere* pSphe
     if( dot( vDir, full.vDir ) > 0 ){
       full.vDir = -full.vDir;
     }
-
+    
+    //cmdlog("FullIntersection: Primtype: %d, index: %d", full.uPrimType, full.uIndex );
+    //cmdlog("Intersection: %d\n", full.kInter.bInter);
     return full;
 }
 
@@ -287,17 +309,25 @@ __kernel void path_trace( __global Camera* pCamera,
                           __global Sphere* pSpheres,
                           __global Triangle* pTriangles,
                           __global Plane* pPlanes,
-                          __global GeometryDescriptor* pDesc )
+                          __global GeometryDescriptor* pDesc,
+                          __global ImageDescriptor* pImgDesc
+                          )
 {
    size_t x = get_global_id(0);
    size_t y = get_global_id(1);
-   if( x == 0 && y == 0 )
-    printf("X,Y: %d, %d\n", x, y);
-  // Normalized coords.
-   float xf = ((float)x)/320.0f;
-   float yf = ((float)y)/240.0f;
 
-   float xt = (xf*2.0 - 1.0f) * (320.0f / 240.0f);
+    float4 prevValue = read_imagef( imgIn, sampler, (int2)(x,y) );
+    int numSamples = pImgDesc[0].numSamples; 
+     
+   //if( x == PIX_X && y == PIX_Y )
+    cmdlog("X,Y: %d, %d\n", x, y);
+    cmdlog("samples: %d\n", pImgDesc[0].numSamples);
+    cmdlog("prevValue: %f, %f, %f, %f\n", prevValue.x, prevValue.y, prevValue.z, prevValue.w);
+  // Normalized coords.
+   float xf = ((float)x)/1280.0f;
+   float yf = ((float)y)/720.0f;
+
+   float xt = (xf*2.0 - 1.0f) * (1280.0f / 720.0f);
    float yt = yf*2.0 - 1.0f;
 
    float2 screen = (float2)( xt, yt );
@@ -318,10 +348,10 @@ __kernel void path_trace( __global Camera* pCamera,
         col = (float4)( 0.0f, 0.0f, 1.0f, 0.0f );
 
    }else{
-     col = (float4)( 1,0,0,1 );
+     col = (float4)( 0,0,0,1 );
    }
     
-   col = (float4)( pDesc[0].numSpheres, pDesc[0].numPlanes, pDesc[0].numTriangles, 1.0f );
+   //col = (float4)( pDesc[0].numSpheres, pDesc[0].numPlanes, pDesc[0].numTriangles, 1.0f );
    float mag = 0.0f;
 
    /*if( patch.bInter != -1 ){
@@ -333,7 +363,10 @@ __kernel void path_trace( __global Camera* pCamera,
    }else{
      col = (float4)( 0.0f, 0.0f, 0.0f, 0.0f );
    }*/
-   // Note: no samplers have been used so indexing is directly through integers.
-   write_imagef( imgOut, (int2)(x,y), col );
+   float4 newSample = col;
+   float4 currSample = prevValue * ( ((float)numSamples)/(numSamples + 1)) + newSample * ( 1.0f/(float)(numSamples + 1) );
+   if( numSamples == 0 )
+    currSample = newSample; 
+   write_imagef( imgOut, (int2)(x,y), currSample );
 
 }

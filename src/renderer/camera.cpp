@@ -3,7 +3,7 @@
 // Automatically captures input from a GLFW service.
 // Two normalized vectors define direction.
 ModelCamera::ModelCamera( GLFWwindow* window ):glWindow(window){
-  glfwSetInputMode( window, GLFW_CURSOR ,GLFW_CURSOR_DISABLED );
+  //glfwSetInputMode( window, GLFW_CURSOR ,GLFW_CURSOR_DISABLED );
 }
 
 void ModelCamera::setSpeedX( float speed ){
