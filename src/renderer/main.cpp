@@ -1,8 +1,18 @@
 /*
 OpenCL entry point
 */
+
+#define GLFW_EXPOSE_NATIVE_GLX
+#define GLFW_EXPOSE_NATIVE_X11
+
 #include <stdgl.h>
+
+#ifdef __linux__
+#include <GLFW/glfw3native.h>
+#else
 #include <OpenGL/OpenGL.h>
+#endif
+
 #include <assets/texture.h>
 #include <renderer/render_target.h>
 #include <renderer/camera.h>
@@ -81,7 +91,11 @@ void handleFrameCounter(){
   }
 
 }
-void mainLoop( cl::CommandQueue& queue, cl::Context& context, cl::Kernel kernel, cl::Buffer clImgDesc){
+
+int sceneChanged(){
+    return pCamera->isChanged();
+}
+void mainLoop( cl::CommandQueue& queue, cl::Context& context, cl::Kernel kernel, cl::Buffer clImgDesc, cl::Buffer clCamera ){
   cl::Event eAcquire, eRelease, eExecute;
   cl_int err;
 
@@ -111,6 +125,7 @@ void mainLoop( cl::CommandQueue& queue, cl::Context& context, cl::Kernel kernel,
  
   eRelease.wait();
 
+
   imgDesc.numSamples += 1;
 
   pAccumulator->glBind( GL_DRAW_FRAMEBUFFER );
@@ -127,10 +142,16 @@ void mainLoop( cl::CommandQueue& queue, cl::Context& context, cl::Kernel kernel,
   glBlitFramebuffer( 0, 0, WIDTH, HEIGHT, 0, 0, WIDTH, HEIGHT, GL_COLOR_BUFFER_BIT, GL_NEAREST );
   checkGLErr( "glBlitFramebuffer" );
 
-
-
-
   glfwPollEvents();
+
+  pCamera->glfwHandleCursor( ((float)(tf - ti))/(CLOCKS_PER_SEC * 1.0f) );
+  if( sceneChanged() ){
+    //printf("scene changed..!");
+    imgDesc.numSamples = 0;
+    CLCamera* cam = pCamera->getCLCamera();
+    queue.enqueueWriteBuffer( clCamera, CL_TRUE, 0, 1 * sizeof(CLCamera), (const void*)cam );
+    delete cam;
+  }
 
   glfwSwapBuffers( window );
   checkGLErr( "glSwapBuffers" );
@@ -190,7 +211,7 @@ int main(int argc, char** argv){
   glfwMakeContextCurrent (window);
   checkGLErr( "glfwMakeContextCurrent" );
   // start GLEW extension handler
-  glewExperimental = TRUE;
+  glewExperimental = GL_TRUE;
   glewInit();
   glGetError();
   //checkGLErr( "GLEW init" );
@@ -214,11 +235,24 @@ int main(int argc, char** argv){
   #ifdef __APPLE__
   CGLContextObj kCGLContext = CGLGetCurrentContext();
   CGLShareGroupObj kCGLShareGroup = CGLGetShareGroup(kCGLContext);
+  cl_context_properties cprops[6] = {CL_CONTEXT_PLATFORM, (cl_context_properties)(platformList[0])(),CL_CONTEXT_PROPERTY_USE_CGL_SHAREGROUP_APPLE , (cl_context_properties) kCGLShareGroup, 0, 0};
+  cl::Context context( CL_DEVICE_TYPE_CPU, cprops, NULL, NULL, &err);
   #endif
 
-  cl_context_properties cprops[6] = {CL_CONTEXT_PLATFORM, (cl_context_properties)(platformList[0])(),CL_CONTEXT_PROPERTY_USE_CGL_SHAREGROUP_APPLE , (cl_context_properties) kCGLShareGroup, 0, 0};
+  #ifdef __linux__
+    cl_platform_id platform;
+    err = clGetPlatformIDs(1, &platform, NULL);
+    cl_context_properties props[] =
+    {
+    	CL_GL_CONTEXT_KHR, (cl_context_properties)glfwGetGLXContext( window ),
+    	CL_GLX_DISPLAY_KHR, (cl_context_properties)glfwGetX11Display(),
+    	CL_CONTEXT_PLATFORM, (cl_context_properties)platform,
+    	0
+    };
+    cl::Context context( CL_DEVICE_TYPE_CPU, props, NULL, NULL, &err);
+  //cl::Context context = clCreateContextFromType(props, CL_DEVICE_TYPE_CPU, NULL, NULL, &err);
+  #endif
 
-  cl::Context context( CL_DEVICE_TYPE_CPU, cprops, NULL, NULL, &err);
 
   checkErr(err, "Context::Context()");
 
@@ -230,9 +264,10 @@ int main(int argc, char** argv){
   pAccumulator = new RenderTarget( WIDTH, HEIGHT, GL_RGBA, GL_RGBA, GL_FLOAT, 0, false );
   checkGLErr( "RenderTarget::RenderTarget" );
 
-  const int inSizeS = 1;
+  const int inSizeS = 3;
   const int inSizeT = 1;
   const int inSizeP = 1;
+  const int inSurf = 3;
 
   /*
   float* outH = new float[inSize];
@@ -240,14 +275,32 @@ int main(int argc, char** argv){
   */
   Sphere* spheres = new Sphere[inSizeS];
   std::cout<<"Sphere: "<< spheres[0].radius << "\n";
+  spheres[0].uSurf = 0;
+  spheres[0].center = glm::vec4( 0.0f, 0.0f, 0.0f, 0.0f );
+  spheres[1].uSurf = 0;
+  spheres[1].center = glm::vec4( 0.0f, 2.0f, 0.0f, 0.0f);
+  spheres[1].radius = 1.0f;
+
+  spheres[2].uSurf = 2;
+  spheres[2].center = glm::vec4( +0.5f, -0.9f, +0.5f, 0.0f);
+  spheres[2].radius = 0.1f;
 
   Plane* planes = new Plane[inSizeP];
   //std::cout<<"Sphere: "<< planes[0].radius << "\n";
+  planes[0].normal = glm::vec4( 0.0f, 1.0f, 0.0f, 0.0f );
+  planes[0].point = glm::vec4( 0.0f, -1.0f, 0.0f, 0.0f );
+  planes[0].uSurf = 1;
 
   Triangle* triangles = new Triangle[inSizeT];
   //std::cout<<"Sphere: "<< spheres[0].radius << "\n";
+  triangles[0].uSurf = 0;
 
   GeometryDescriptor* geometry = new GeometryDescriptor( inSizeS, inSizeP, inSizeT );
+
+  Surface* pSurf = new Surface[inSurf];
+  pSurf[0].vColor = glm::vec4( 1.0f, 1.0f, 0.0f, 1.0f );
+  pSurf[1].vColor = glm::vec4( 0.9f, 0.9f, 0.9f, 0.5f );
+  pSurf[2].vColor = glm::vec4( 1.0f, 1.0f, 1.0f, 1.0f );
 
   cl::Buffer clSpheres( context, CL_MEM_READ_ONLY, inSizeS * sizeof( Sphere ));
   checkErr(err, "Buffer::Buffer()");
@@ -267,6 +320,12 @@ int main(int argc, char** argv){
   cl::Buffer clImgDesc( context, CL_MEM_READ_ONLY, 1 * sizeof( ImageDescriptor ) );
   checkErr(err, "Buffer::Buffer()");
   
+  cl::Buffer clSeed( context, CL_MEM_READ_WRITE, WIDTH * HEIGHT * 4 * sizeof( uint ) );
+  checkErr(err, "Buffer::Buffer()");
+  
+  cl::Buffer clSurf( context, CL_MEM_READ_WRITE, inSurf * sizeof( Surface ) );
+  checkErr(err, "Buffer::Buffer()");
+  
   cl::ImageGL imgGL( context, CL_MEM_WRITE_ONLY, GL_TEXTURE_2D, 0, pCLTarget->getColorTexture()->glGetInternalTexture(), &err );
   checkErr(err, "ImageGL::ImageGL()");
 
@@ -275,10 +334,11 @@ int main(int argc, char** argv){
 
   std::cout<<"Created buffers."<< std::endl;
 
-  /*float *f = new float[inSize];
-  for( int i = 0; i < inSize; i++ ){
-    f[i] = i;
-  }*/
+  srand( time( NULL ) );
+  uint *pSeeds = new uint[WIDTH * HEIGHT * 4];
+  for( int i = 0; i < WIDTH * HEIGHT * 4; i++ ){
+    pSeeds[i] = rand();
+  }
 
   std::vector<cl::Device> devices;
   devices = context.getInfo<CL_CONTEXT_DEVICES>();
@@ -321,17 +381,20 @@ int main(int argc, char** argv){
   checkErr(err, "Kernel::setArg()");
   err = kernel.setArg(7, clImgDesc);
   checkErr(err, "Kernel::setArg()");
-
-
+  err = kernel.setArg(8, clSeed);
+  checkErr(err, "Kernel::setArg()");
+  err = kernel.setArg(9, clSurf);
+  checkErr(err, "Kernel::setArg()");
+  
   std::cout<<"Built Kernel"<< std::endl;
 
   pCamera = new ModelCamera( window );
-  pCamera->setSpeedX( 0.1f );
-  pCamera->setSpeedY( 0.1f );
+  pCamera->setSpeedX( 0.03f );
+  pCamera->setSpeedY( 0.03f );
 
   pCamera->setRadius( 5.0f );
   pCamera->setOrientation( glm::vec3( 0.0f, -1.0f, 0.0f ) );
-  pCamera->reset( glm::vec3( 0.0f, 0.0f, -1.0f ) );
+  pCamera->reset( glm::vec3( 1.0f, 0.1f, -0.1f ) );
 
 
   cl::CommandQueue queue(context, devices[0], 0, &err);
@@ -344,13 +407,14 @@ int main(int argc, char** argv){
 
   std::cout<<cam->vUp.x<<","<<cam->vUp.y<<","<<cam->vUp.z<<std::endl;
 
-  std::cout<< sizeof( CLCamera )<< std::endl;
+  std::cout<< sizeof( Sphere )<< std::endl;
   queue.enqueueWriteBuffer( clCamera, CL_TRUE, 0, 1 * sizeof(CLCamera), (const void*)cam );
   queue.enqueueWriteBuffer( clSpheres, CL_TRUE, 0, inSizeS * sizeof(Sphere), (const void*)spheres);
   queue.enqueueWriteBuffer( clPlanes, CL_TRUE, 0, inSizeP * sizeof(Plane), (const void*)triangles);
   queue.enqueueWriteBuffer( clTriangles, CL_TRUE, 0, inSizeT * sizeof(Triangle), (const void*)planes);
   queue.enqueueWriteBuffer( clGeom, CL_TRUE, 0, 1 * sizeof(GeometryDescriptor), (const void*)geometry);
-
+  queue.enqueueWriteBuffer( clSeed, CL_TRUE, 0, WIDTH * HEIGHT * 4 * sizeof(uint), (const void*)pSeeds);
+  queue.enqueueWriteBuffer( clSurf, CL_TRUE, 0, inSurf * sizeof(Surface), (const void*)pSurf);
 
   vSharedUnits = new std::vector<cl::Memory>();
   vSharedUnits->push_back( imgGL );
@@ -362,7 +426,7 @@ int main(int argc, char** argv){
   cLast = clock();
   while( !glfwWindowShouldClose( window ) ){
     //usleep( 1000000 );
-    mainLoop( queue, context, kernel, clImgDesc );
+    mainLoop( queue, context, kernel, clImgDesc, clCamera );
   }
 
   /* Previous Program. Remove these if you think they are not required.

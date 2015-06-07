@@ -56,3 +56,10 @@ GeometryDescriptor::GeometryDescriptor( int a, int b, int c ){
     this->numPlanes = c;
 
 }
+
+Surface::Surface( glm::vec4 color ){
+    vColor = color;
+}
+Surface::Surface(){
+    vColor = glm::vec4( 0, 0, 0, 0 );
+}
