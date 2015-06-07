@@ -87,7 +87,7 @@ typedef struct _Surface
 
 // CORE RANDOMIZERS
 
-// XORSHIFT128 RNG for decent randomness. 
+// XORSHIFT128 RNG for decent randomness.
 uint rng_next( __global uint4* state, int k ) {
     cmdlog("State: %d,%d,%d,%d\n", (int)state[k].x, (int)state[k].y, (int)state[k].z,(int)state[k].w );
     uint t = state[k].x ^ ( state[k].x << 11);
@@ -109,9 +109,9 @@ float4 random_sample_hemisphere( __global uint4* state, int k, float4 vDir ){
 
     float p0 = get_rng_float( state, k );
     float p1 = get_rng_float( state, k );
-    
+
     // Form perpendicular vector.
-    
+
     float4 vecRand = normalize( (float4) ( 1.0f, 0.3f, 1.4f, 0.0f ) );
     //float4 vPerp = (float4) ( vDir.y, -vDir.x, 0.0f, 0.0f );
     if( dot( vecRand, vDir ) == 0 )
@@ -135,10 +135,26 @@ float4 random_sample_hemisphere( __global uint4* state, int k, float4 vDir ){
     return ray;
 }
 
+//Returns a float2 coordinate to shoot a ray.
+float2 findRandomPoint(float4* state, int k, float2 pix)
+{
+    cmdlog("Random point:  %f, %f", pix.x, pix.y);
+    float2 newPt;
+    float scaleX = get_rng_float(state,k);
+    float scaleY = get_rng_float(state,k);
+    float deltaX = 1/(float)WIDTH;
+    float deltaY =  1/(float)HEIGHT;
+    newPt.x = pix.x + scaleX*deltaX;
+    newPt.y = pix.y + scaleY*deltaY;
+    cmdlog(":%f, %f\n", newPt.x, newPt.y);
+    return newPt;
+}
+
+
 // Returns a normalized vector corresponding to the camera context and screen position.
 float4 shoot_ray( float2 screen, __global Camera* cam )
 {
-
+  
   float z = 1.0f; // Assume unit Z Depth.
 
   float4 vCompY = cam->vLookAt * z + cam->vUp * z * screen.y;
@@ -174,7 +190,7 @@ Intersection rayPlaneIntersect( float4 vPos, float4 vDir, __global Plane* plane,
     x.vPos = (float4)(0,0,0,0);
     x.vDir = (float4)(0,0,0,0);
     x.bInter = 0;
-    
+
     float angle = dot(vDir, plane[i].normal);
     if(angle == 0)
         return x;
@@ -184,7 +200,7 @@ Intersection rayPlaneIntersect( float4 vPos, float4 vDir, __global Plane* plane,
         x.bInter = 1;
     else
         x.bInter = 0;
-    
+
     float k = dot( plane[i].normal, plane[i].pt - vPos )/dot( plane[i].normal, vDir );
     //cmdlog("k: %f\n", k);
     x.vPos = k * vDir + vPos;
@@ -229,14 +245,14 @@ Intersection raySphereIntersect( float4 vPos, float4 vDir, __global Sphere* pSph
   Intersection vIntPoint;
   vIntPoint.bInter = 0;
   vIntPoint.vPos = (float4)( 0.0f, 0.0f, 0.0f, 0.0f );
-    
+
   /*cmdlog("vPos %f, %f, %f\n", vPos.x, vPos.y, vPos.z);
   cmdlog("vDir %f, %f, %f\n", vDir.x, vDir.y, vDir.z);
   cmdlog("i %d\n", i);
   cmdlog("pSphere.vPos %f, %f, %f, %f\n", pSphere[i].vPos.x, pSphere[i].vPos.y, pSphere[i].vPos.z, pSphere[i].vPos.w);
   cmdlog("pSphere.fRadius %f\n", pSphere[i].fRadius);
   cmdlog("pSphere.uSurface %d\n", (int)pSphere[i].uSurface);*/
-  
+
   float curDisc = get_discriminant(vPos,vDir,pSphere,i);
 
   if(curDisc < 0)
@@ -305,7 +321,7 @@ FullIntersection ray_intersect( float4 vPos, float4 vDir, __global Sphere* pSphe
       //printf("%d, %d: Sphere: %d\n", get_global_id(0), get_global_id(1), inter.bInter);
       cmdlog( "inter with %d: %d\n", i, inter.bInter );
       if( inter.bInter != 0 ){
-        
+
         float dist = distance( inter.vPos, vPos );
         cmdlog( "dist: %f\n", dist  );
         if( dist < minDist ){
@@ -377,7 +393,7 @@ FullIntersection ray_intersect( float4 vPos, float4 vDir, __global Sphere* pSphe
     if( dot( vDir, full.vDir ) > 0 ){
       full.vDir = -full.vDir;
     }
-    
+
     //cmdlog("FullIntersection: Primtype: %d, index: %d", full.uPrimType, full.uIndex );
     //cmdlog("Intersection: %d\n", full.kInter.bInter);
     return full;
@@ -388,7 +404,7 @@ FullIntersection ray_intersect( float4 vPos, float4 vDir, __global Sphere* pSphe
 
 // Lambertian:
 float brdf_lambertian( FullIntersection patch, float4 vPos, float4 vDir ){
-    
+
 
 }
 
@@ -414,8 +430,8 @@ __kernel void path_trace( __global Camera* pCamera,
     size_t y = get_global_id(1);
 
     float4 prevValue = read_imagef( imgIn, sampler, (int2)(x,y) );
-    int numSamples = pImgDesc[0].numSamples; 
-    
+    int numSamples = pImgDesc[0].numSamples;
+
     rng_next( randSeed, x*HEIGHT + y );
    //if( x == PIX_X && y == PIX_Y )
     cmdlog("\nX,Y: %d, %d\n", x, y);
@@ -423,34 +439,40 @@ __kernel void path_trace( __global Camera* pCamera,
     cmdlog("prevValue: %f, %f, %f, %f\n", prevValue.x, prevValue.y, prevValue.z, prevValue.w);
     cmdlog("sizeof Sphere: %d\n", sizeof(Sphere) );
     // Normalized coords.
-    float xf = ((float)x)/1280.0f;
-    float yf = ((float)y)/720.0f;
+    float xf = ((float)x)/WIDTH*1.0f;
+    float yf = ((float)y)/HEIGHT*1.0f;;
 
-    float xt = (xf*2.0 - 1.0f) * (1280.0f / 720.0f);
+    float xt = (xf*2.0 - 1.0f) * ( WIDTH*1.0f / HEIGHT);
     float yt = yf*2.0 - 1.0f;
+    
+    
+    int samples = 1;
 
-    float2 screen = (float2)( xt, yt );
+    for( int k = 0; k < samples; k++ ){
+
+    float2 screen = findRandomPoint( randSeed, x*HEIGHT + y, (float2)( xt, yt ) );
 
     float4 ray = (shoot_ray( screen, pCamera ));
 
     FullIntersection patch;// = ray_intersect( pCamera[0].vPos, ray, pSpheres, pPlanes, pTriangles, pDesc, pSurfaces, -1, -1 );
 
     // Second intersection.
-    
+
+
     FullIntersection eyePatch;
     eyePatch.vDir = ray;
     eyePatch.kInter.vPos = pCamera[0].vPos;
     eyePatch.uPrimType = -1;
     eyePatch.uIndex = -1;
-    
+
     float4 col = (float4)(1.0f,1.0f,1.0f,1.0f);
     int i = 0;
 
     patch = eyePatch;
-    
+
     for( ; ; i++){
 
-        
+
             float4 launchRef = patch.vDir;
             float4 launchPos = patch.kInter.vPos + patch.vDir * 0.00001f;// Push slightly to avoid self-intersection.
             //if( i == 0 )
@@ -459,10 +481,15 @@ __kernel void path_trace( __global Camera* pCamera,
             if( i == 0 )
                 launchDir = launchRef;
 
-            cmdlog("launchRef: %f, %f, %f, %f\n", launchRef.x, launchRef.y, launchRef.z, launchRef.w); 
+            if( i == 3 ){
+                col *= (float4)(0.3f, 0.3f, 0.4f, 0.3f);// sky color.
+                break;
+            }
+
+            cmdlog("launchRef: %f, %f, %f, %f\n", launchRef.x, launchRef.y, launchRef.z, launchRef.w);
             cmdlog("launchDir: %f, %f, %f, %f\n", launchDir.x, launchDir.y, launchDir.z, launchDir.w);
             FullIntersection patch2 = ray_intersect( launchPos, launchDir, pSpheres, pPlanes, pTriangles, pDesc, pSurfaces, patch.uPrimType, patch.uIndex );
-         
+
             if( patch2.kInter.bInter ){
                 if( patch2.vEmissive.w != 0.0f ){
                     col *= patch2.vEmissive;// sky color.
@@ -476,18 +503,20 @@ __kernel void path_trace( __global Camera* pCamera,
                 cmdlog("%d Miss\n", i);
                 break;
             }
-
-            //col = patch.vDiffuse * col;
+                //col = patch.vDiffuse * col;
         patch = patch2;
     }
-    
+
     cmdlog("final col: %f, %f, %f, %f; %d bumps\n", col.x, col.y, col.z, col.w, i);
 
     float4 newSample = col;
     float4 currSample = prevValue * ( ((float)numSamples)/(numSamples + 1)) + newSample * ( 1.0f/(float)(numSamples + 1) );
     if( numSamples == 0 )
-      currSample = newSample; 
-    write_imagef( imgOut, (int2)(x,y), currSample );
+      currSample = newSample;
 
+    prevValue = currSample;
+    numSamples ++;
+    }
+
+    write_imagef( imgOut, (int2)(x,y), prevValue );
 }
-

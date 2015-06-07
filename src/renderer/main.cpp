@@ -147,7 +147,7 @@ void mainLoop( cl::CommandQueue& queue, cl::Context& context, cl::Kernel kernel,
   pCamera->glfwHandleCursor( ((float)(tf - ti))/(CLOCKS_PER_SEC * 1.0f) );
   if( sceneChanged() ){
     //printf("scene changed..!");
-    imgDesc.numSamples = 2;
+    imgDesc.numSamples = 1;
     CLCamera* cam = pCamera->getCLCamera();
     queue.enqueueWriteBuffer( clCamera, CL_TRUE, 0, 1 * sizeof(CLCamera), (const void*)cam );
     delete cam;
@@ -264,7 +264,7 @@ int main(int argc, char** argv){
   pAccumulator = new RenderTarget( WIDTH, HEIGHT, GL_RGBA, GL_RGBA, GL_FLOAT, 0, false );
   checkGLErr( "RenderTarget::RenderTarget" );
 
-  const int inSizeS = 3;
+  const int inSizeS = 4;
   const int inSizeT = 1;
   const int inSizeP = 1;
   const int inSurf = 3;
@@ -282,9 +282,21 @@ int main(int argc, char** argv){
   spheres[1].radius = 1.0f;
 
   spheres[2].uSurf = 2;
-  spheres[2].center = glm::vec4( +1.5f, -0.5f, +1.5f, 0.0f);
-  spheres[2].radius = 0.5f;
+  spheres[2].center = glm::vec4( +1.5f, 2.7f, +1.5f, 0.0f);
+  spheres[2].radius = 0.3f;
 
+  
+  spheres[3].uSurf = 2;
+  spheres[3].center = glm::vec4( +1.5f, 2.7f, -1.5f, 0.0f);
+  spheres[3].radius = 0.3f;
+
+  /*spheres[4].uSurf = 2;
+  spheres[4].center = glm::vec4( -1.5f, -0.7f, -1.5f, 0.0f);
+  spheres[4].radius = 0.3f;
+  
+  spheres[5].uSurf = 2;
+  spheres[5].center = glm::vec4( -1.5f, -0.7f, +1.5f, 0.0f);
+  spheres[5].radius = 0.3f;*/
   Plane* planes = new Plane[inSizeP];
   //std::cout<<"Sphere: "<< planes[0].radius << "\n";
   planes[0].normal = glm::vec4( 0.0f, 1.0f, 0.0f, 0.0f );
@@ -300,8 +312,8 @@ int main(int argc, char** argv){
   Surface* pSurf = new Surface[inSurf];
   pSurf[0].vColor = glm::vec4( 1.0f, 1.0f, 0.0f, 1.0f );
   pSurf[1].vColor = glm::vec4( 0.9f, 0.9f, 0.9f, 0.5f );
-  pSurf[2].vColor = glm::vec4( 1.0f, 1.0f, 1.0f, 1.0f );
-  pSurf[2].vEmissive = glm::vec4( 2.0f, 2.0f, 2.0f, 2.0f );
+  pSurf[2].vColor = glm::vec4( 0.0f, 1.0f, 0.0f, 1.0f );
+  pSurf[2].vEmissive = glm::vec4( 10.5f, 10.5f, 10.5f,10.0f );
 
   cl::Buffer clSpheres( context, CL_MEM_READ_ONLY, inSizeS * sizeof( Sphere ));
   checkErr(err, "Buffer::Buffer()");
