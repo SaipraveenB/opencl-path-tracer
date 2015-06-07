@@ -147,7 +147,7 @@ void mainLoop( cl::CommandQueue& queue, cl::Context& context, cl::Kernel kernel,
   pCamera->glfwHandleCursor( ((float)(tf - ti))/(CLOCKS_PER_SEC * 1.0f) );
   if( sceneChanged() ){
     //printf("scene changed..!");
-    imgDesc.numSamples = 0;
+    imgDesc.numSamples = 2;
     CLCamera* cam = pCamera->getCLCamera();
     queue.enqueueWriteBuffer( clCamera, CL_TRUE, 0, 1 * sizeof(CLCamera), (const void*)cam );
     delete cam;
@@ -282,8 +282,8 @@ int main(int argc, char** argv){
   spheres[1].radius = 1.0f;
 
   spheres[2].uSurf = 2;
-  spheres[2].center = glm::vec4( +0.5f, -0.9f, +0.5f, 0.0f);
-  spheres[2].radius = 0.1f;
+  spheres[2].center = glm::vec4( +1.5f, -0.5f, +1.5f, 0.0f);
+  spheres[2].radius = 0.5f;
 
   Plane* planes = new Plane[inSizeP];
   //std::cout<<"Sphere: "<< planes[0].radius << "\n";
@@ -301,6 +301,7 @@ int main(int argc, char** argv){
   pSurf[0].vColor = glm::vec4( 1.0f, 1.0f, 0.0f, 1.0f );
   pSurf[1].vColor = glm::vec4( 0.9f, 0.9f, 0.9f, 0.5f );
   pSurf[2].vColor = glm::vec4( 1.0f, 1.0f, 1.0f, 1.0f );
+  pSurf[2].vEmissive = glm::vec4( 2.0f, 2.0f, 2.0f, 2.0f );
 
   cl::Buffer clSpheres( context, CL_MEM_READ_ONLY, inSizeS * sizeof( Sphere ));
   checkErr(err, "Buffer::Buffer()");

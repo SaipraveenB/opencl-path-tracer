@@ -57,9 +57,11 @@ GeometryDescriptor::GeometryDescriptor( int a, int b, int c ){
 
 }
 
-Surface::Surface( glm::vec4 color ){
+Surface::Surface( glm::vec4 color, glm::vec4 emissive ){
     vColor = color;
+    vEmissive = emissive;
 }
 Surface::Surface(){
     vColor = glm::vec4( 0, 0, 0, 0 );
+    vEmissive = glm::vec4( 0, 0, 0, 0 );
 }

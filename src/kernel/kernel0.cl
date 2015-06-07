@@ -47,6 +47,7 @@ typedef struct _FullIntersection{
   // Put other stuff like BRDF, normals, texture coords etc. here,
   // to be calculated by ray_intersect after determining the hit.
   float4 vDiffuse;
+  float4 vEmissive;
 
 } FullIntersection;
 
@@ -81,6 +82,7 @@ typedef struct __Plane
 typedef struct _Surface
 {
     float4 vColor;
+    float4 vEmissive;
 } Surface;
 
 // CORE RANDOMIZERS
@@ -359,6 +361,7 @@ FullIntersection ray_intersect( float4 vPos, float4 vDir, __global Sphere* pSphe
     full.uIndex = index;
     full.kInter = currInter;
     full.vDiffuse = surface.vColor;
+    full.vEmissive = surface.vEmissive;
 
     // To find the normal.
     if( full.uPrimType == 0 ){
@@ -452,6 +455,7 @@ __kernel void path_trace( __global Camera* pCamera,
             float4 launchPos = patch.kInter.vPos + patch.vDir * 0.00001f;// Push slightly to avoid self-intersection.
             //if( i == 0 )
             float4 launchDir = random_sample_hemisphere( randSeed, x*HEIGHT + y, launchRef );
+            // Directly launch the first ray( from the eye ).
             if( i == 0 )
                 launchDir = launchRef;
 
@@ -460,10 +464,15 @@ __kernel void path_trace( __global Camera* pCamera,
             FullIntersection patch2 = ray_intersect( launchPos, launchDir, pSpheres, pPlanes, pTriangles, pDesc, pSurfaces, patch.uPrimType, patch.uIndex );
          
             if( patch2.kInter.bInter ){
+                if( patch2.vEmissive.w != 0.0f ){
+                    col *= patch2.vEmissive;// sky color.
+                    cmdlog("%d HIT LIGHT %d,%d\n", i, patch2.uPrimType, patch2.uIndex);
+                    break;
+                }
                 col *= (float4)patch2.vDiffuse;
                 cmdlog("%d HIT %d,%d\n", i, patch2.uPrimType, patch2.uIndex);
             }else{
-                col *= (float4)(0.6f, 0.6f, 0.8f, 1.0f);// sky color.
+                col *= (float4)(0.3f, 0.3f, 0.4f, 0.3f);// sky color.
                 cmdlog("%d Miss\n", i);
                 break;
             }
