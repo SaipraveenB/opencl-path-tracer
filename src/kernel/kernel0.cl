@@ -1,10 +1,11 @@
 #pragma OPENCL EXTENSION cl_khr_byte_addressable_store : enable
-#define PIX_X 640
-#define PIX_Y 460
+#define PIX_X 320
+#define PIX_Y 240
 
-#define WIDTH 1280
-#define HEIGHT 720
+#define WIDTH 640
+#define HEIGHT 480
 
+#define CMD_DEBUG
 #ifdef CMD_DEBUG
 #define cmdlog(x, ...) if( PIX_X == get_global_id(0) && PIX_Y == get_global_id(1) ) printf(x, __VA_ARGS__);
 #else
@@ -130,20 +131,20 @@ float4 random_sample_hemisphere( __global uint4* state, int k, float4 vDir ){
     p0 = p0/2.0f;
     cmdlog("p0,p1: %f,%f\n", p0, p1);
 
-    float4 ray = ( sinpi( p0 ) * vDir ) + ( cospi( p0 ) * ( cospi( p1 ) * vPerp + sinpi( p1 ) * vPerp2 ) );
+    float4 ray = ( cospi( p0 ) * vDir ) + ( sinpi( p0 ) * ( cospi( p1 ) * vPerp + sinpi( p1 ) * vPerp2 ) );
     ray.w = 0.0f;
     return ray;
 }
 
 //Returns a float2 coordinate to shoot a ray.
-float2 findRandomPoint(float4* state, int k, float2 pix)
+float2 findRandomPoint(__global uint4* state, int k, float2 pix)
 {
     cmdlog("Random point:  %f, %f", pix.x, pix.y);
     float2 newPt;
     float scaleX = get_rng_float(state,k);
     float scaleY = get_rng_float(state,k);
-    float deltaX = 1/(float)WIDTH;
-    float deltaY =  1/(float)HEIGHT;
+    float deltaX = 25.0f/(float)WIDTH;
+    float deltaY =  25.0f/(float)HEIGHT;
     newPt.x = pix.x + scaleX*deltaX;
     newPt.y = pix.y + scaleY*deltaY;
     cmdlog(":%f, %f\n", newPt.x, newPt.y);
@@ -246,14 +247,16 @@ Intersection raySphereIntersect( float4 vPos, float4 vDir, __global Sphere* pSph
   vIntPoint.bInter = 0;
   vIntPoint.vPos = (float4)( 0.0f, 0.0f, 0.0f, 0.0f );
 
-  /*cmdlog("vPos %f, %f, %f\n", vPos.x, vPos.y, vPos.z);
+  cmdlog("vPos %f, %f, %f\n", vPos.x, vPos.y, vPos.z);
   cmdlog("vDir %f, %f, %f\n", vDir.x, vDir.y, vDir.z);
   cmdlog("i %d\n", i);
   cmdlog("pSphere.vPos %f, %f, %f, %f\n", pSphere[i].vPos.x, pSphere[i].vPos.y, pSphere[i].vPos.z, pSphere[i].vPos.w);
   cmdlog("pSphere.fRadius %f\n", pSphere[i].fRadius);
-  cmdlog("pSphere.uSurface %d\n", (int)pSphere[i].uSurface);*/
+  cmdlog("pSphere.uSurface %d\n", (int)pSphere[i].uSurface);
 
   float curDisc = get_discriminant(vPos,vDir,pSphere,i);
+
+  cmdlog("curDisc: %f\n", curDisc);
 
   if(curDisc < 0)
       return vIntPoint;
@@ -262,7 +265,7 @@ Intersection raySphereIntersect( float4 vPos, float4 vDir, __global Sphere* pSph
   float distA = -(dot(vDir,vPos - pSphere[i].vPos)) - curDisc;
   float distB = distA + 2*curDisc;
 
-  if( distA < 0 && distB < 0 )
+  if( distA < 0 || distB < 0 )
       return vIntPoint;
 
 
@@ -281,9 +284,9 @@ Intersection raySphereIntersect( float4 vPos, float4 vDir, __global Sphere* pSph
       vIntPoint.vPos = vPos + distB * vDir;
       //vIntPoint.vDir = getNormal( pSphere, i, vIntPoint.vPos );
   }
-
-  //cmdlog("intPoint.vPos %f, %f, %f\n", vIntPoint.vPos.x, vIntPoint.vPos.y, vIntPoint.vPos.z);
-  //cmdlog("intPoint.bInter %d\n", vIntPoint.bInter);
+  cmdlog("distA: %f, distB: %f\n", distA, distB );
+  cmdlog("intPoint.vPos %f, %f, %f\n", vIntPoint.vPos.x, vIntPoint.vPos.y, vIntPoint.vPos.z);
+  cmdlog("intPoint.bInter %d\n", vIntPoint.bInter);
   return vIntPoint;
 }
 
@@ -401,12 +404,13 @@ FullIntersection ray_intersect( float4 vPos, float4 vDir, __global Sphere* pSphe
 
 
 // BRDF methods.
-
+// BRDF Methods return a random sampler ray that adheres to the BRDF of the surface.
 // Lambertian:
-float brdf_lambertian( FullIntersection patch, float4 vPos, float4 vDir ){
-
-
+float4 brdf_lambertian( FullIntersection patch, float4 vPos, float4 vDir, __global uint4* state, int k ){
+    float4 launchDir = random_sample_hemisphere( state, k, patch.vDir );
+    return launchDir;
 }
+
 
 // TODO: Need another kernel for quickly building octree out of Sphere, Triangle and Plane.
 /*
@@ -446,7 +450,7 @@ __kernel void path_trace( __global Camera* pCamera,
     float yt = yf*2.0 - 1.0f;
     
     
-    int samples = 1;
+    int samples = 20;
 
     for( int k = 0; k < samples; k++ ){
 
@@ -470,25 +474,31 @@ __kernel void path_trace( __global Camera* pCamera,
 
     patch = eyePatch;
 
+    float4 incomingDir = (float4)( 0.0f, 0.0f, 0.0f, 0.0f );
+
     for( ; ; i++){
 
 
             float4 launchRef = patch.vDir;
             float4 launchPos = patch.kInter.vPos + patch.vDir * 0.00001f;// Push slightly to avoid self-intersection.
             //if( i == 0 )
-            float4 launchDir = random_sample_hemisphere( randSeed, x*HEIGHT + y, launchRef );
+
+            float4 launchDir = brdf_lambertian( patch, (float4)(0,0,0,0), incomingDir, randSeed, x*HEIGHT + y );
+
             // Directly launch the first ray( from the eye ).
             if( i == 0 )
                 launchDir = launchRef;
 
             if( i == 3 ){
-                col *= (float4)(0.3f, 0.3f, 0.4f, 0.3f);// sky color.
+                col *= (float4)(0.3f, 0.3f, 0.3f, 0.3f);// sky color.
                 break;
             }
 
             cmdlog("launchRef: %f, %f, %f, %f\n", launchRef.x, launchRef.y, launchRef.z, launchRef.w);
             cmdlog("launchDir: %f, %f, %f, %f\n", launchDir.x, launchDir.y, launchDir.z, launchDir.w);
             FullIntersection patch2 = ray_intersect( launchPos, launchDir, pSpheres, pPlanes, pTriangles, pDesc, pSurfaces, patch.uPrimType, patch.uIndex );
+            
+            incomingDir = launchDir;
 
             if( patch2.kInter.bInter ){
                 if( patch2.vEmissive.w != 0.0f ){

@@ -32,8 +32,8 @@ OpenCL entry point
 
 
 
-#define WIDTH 1280
-#define HEIGHT 720
+#define WIDTH 640
+#define HEIGHT 480
 #define FPS_INTERVAL 0.5
 
 inline void checkErr(cl_int err, const char * name) {
@@ -126,7 +126,7 @@ void mainLoop( cl::CommandQueue& queue, cl::Context& context, cl::Kernel kernel,
   eRelease.wait();
 
 
-  imgDesc.numSamples += 1;
+  imgDesc.numSamples += 20;
 
   pAccumulator->glBind( GL_DRAW_FRAMEBUFFER );
   checkGLErr( "glBind GL_DRAW_FRAMEBUFFER, Accumulator " );
@@ -163,8 +163,9 @@ void mainLoop( cl::CommandQueue& queue, cl::Context& context, cl::Kernel kernel,
   //float timeTaken = ( (float)(tf - ti) ) / (float)CLOCKS_PER_SEC;
   //std::cout<<"Time taken: "<< timeTaken * 1000 << "ms" << std::endl;
   //std::cout<<"Predicted FPS: "<< 1 / timeTaken << " FPS"<< std::endl;
-
-  handleFrameCounter();
+  if( imgDesc.numSamples % 10 == 0 )
+    std::cout<<"numSamples: "<<imgDesc.numSamples<<std::endl;
+  //handleFrameCounter();
 
 }
 
@@ -264,7 +265,7 @@ int main(int argc, char** argv){
   pAccumulator = new RenderTarget( WIDTH, HEIGHT, GL_RGBA, GL_RGBA, GL_FLOAT, 0, false );
   checkGLErr( "RenderTarget::RenderTarget" );
 
-  const int inSizeS = 4;
+  const int inSizeS = 2;
   const int inSizeT = 1;
   const int inSizeP = 1;
   const int inSurf = 3;
@@ -277,16 +278,16 @@ int main(int argc, char** argv){
   std::cout<<"Sphere: "<< spheres[0].radius << "\n";
   spheres[0].uSurf = 0;
   spheres[0].center = glm::vec4( 0.0f, 0.0f, 0.0f, 0.0f );
-  spheres[1].uSurf = 0;
+  /*spheres[1].uSurf = 0;
   spheres[1].center = glm::vec4( 0.0f, 2.0f, 0.0f, 0.0f);
-  spheres[1].radius = 1.0f;
+  spheres[1].radius = 1.0f;*/
 
-  spheres[2].uSurf = 2;
-  spheres[2].center = glm::vec4( +1.5f, 2.7f, +1.5f, 0.0f);
-  spheres[2].radius = 0.3f;
+  spheres[1].uSurf = 2;
+  spheres[1].center = glm::vec4( 10.5f, 10.7f, 10.5f, 0.0f);
+  spheres[1].radius = 6.0f;
 
   
-  spheres[3].uSurf = 2;
+  /*spheres[3].uSurf = 2;
   spheres[3].center = glm::vec4( +1.5f, 2.7f, -1.5f, 0.0f);
   spheres[3].radius = 0.3f;
 
@@ -313,7 +314,7 @@ int main(int argc, char** argv){
   pSurf[0].vColor = glm::vec4( 1.0f, 1.0f, 0.0f, 1.0f );
   pSurf[1].vColor = glm::vec4( 0.9f, 0.9f, 0.9f, 0.5f );
   pSurf[2].vColor = glm::vec4( 0.0f, 1.0f, 0.0f, 1.0f );
-  pSurf[2].vEmissive = glm::vec4( 10.5f, 10.5f, 10.5f,10.0f );
+  pSurf[2].vEmissive = glm::vec4( 4.5f, 4.5f, 4.5f,4.0f );
 
   cl::Buffer clSpheres( context, CL_MEM_READ_ONLY, inSizeS * sizeof( Sphere ));
   checkErr(err, "Buffer::Buffer()");
