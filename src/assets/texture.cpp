@@ -77,16 +77,16 @@
       glGenerateMipmap( GL_TEXTURE_2D );
   }
   BlankTexture::BlankTexture( int width, int height, GLenum internalFormat, GLenum format, GLenum type, int iNumSamples, bool mipmaps ):Texture( 0 ){
-    if( iNumSamples )
-      setBindTarget( GL_TEXTURE_2D_MULTISAMPLE );
+    if( iNumSamples );
+      //setBindTarget( GL_TEXTURE_2D_MULTISAMPLE );
     else
       setBindTarget( GL_TEXTURE_2D );
     this->bMipmaps = mipmaps;
     glBind();
     setTextureDataFormat( internalFormat, format, type );
 
-    if( iNumSamples )
-      glTexImage2DMultisample( GL_TEXTURE_2D_MULTISAMPLE, iNumSamples, eInternalFormat, width, height, GL_TRUE );
+    if( iNumSamples );
+      //glTexImage2DMultisample( GL_TEXTURE_2D_MULTISAMPLE, iNumSamples, eInternalFormat, width, height, GL_TRUE );
     else{
       glTexImage2D( GL_TEXTURE_2D, 0, eInternalFormat, width, height, 0, eFormat, eType, NULL );
       if( bMipmaps )

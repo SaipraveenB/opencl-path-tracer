@@ -1,6 +1,5 @@
 #include <stdgl.h>
 #include <renderer/render_target.h>
-#include <iostream>
 
   RenderTarget::RenderTarget( int width, int height, int numSamples, bool mipmaps ){
     RenderTarget( width, height, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE, numSamples, mipmaps );
@@ -33,8 +32,8 @@
     pDepth->glBind();
 
     if( numSamples ){
-      glFramebufferTexture( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, pTex->glGetInternalTexture() ,0 );
-      glFramebufferTexture( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, pDepth->glGetInternalTexture() ,0 );
+      glFramebufferTexture1D( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_1D, pTex->glGetInternalTexture() ,0 );
+      glFramebufferTexture1D( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,GL_TEXTURE_1D, pDepth->glGetInternalTexture() ,0 );
     }else{
       glFramebufferTexture2D( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pTex->glGetInternalTexture(), 0 );
       glFramebufferTexture2D( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, pDepth->glGetInternalTexture(), 0 );

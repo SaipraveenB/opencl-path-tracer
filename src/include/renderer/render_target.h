@@ -5,13 +5,6 @@
 #ifndef RENDERTARGET_H
 #define RENDERTARGET_H
 
-class AbstractRenderTarget{
-protected:
-  GLuint fbo;
-public:
-  virtual void glInit() = 0;
-};
-
 class RenderTarget{
   GLuint fbo;
   BlankTexture* pTex;

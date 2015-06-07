@@ -104,7 +104,7 @@ void mainLoop( cl::CommandQueue& queue, cl::Context& context, cl::Kernel kernel,
   checkGLErr( "glFinish()" );
 
   queue.enqueueWriteBuffer( clImgDesc, CL_TRUE, 0, 1 * sizeof(ImageDescriptor), (const void*)&imgDesc);
-  
+
   err = queue.enqueueAcquireGLObjects( vSharedUnits, NULL, &eAcquire );
   checkErr(err, "CommandQueue::enqueueAcquireGLObjects()");
 
@@ -122,7 +122,7 @@ void mainLoop( cl::CommandQueue& queue, cl::Context& context, cl::Kernel kernel,
   queue.finish();
   err = queue.enqueueReleaseGLObjects( vSharedUnits, NULL, &eRelease );
   checkErr(err, "CommandQueue::enqueueReleaseGLObjects()");
- 
+
   eRelease.wait();
 
 
@@ -259,7 +259,7 @@ int main(int argc, char** argv){
   std::cout<<"Created context."<< std::endl;
 
   // Create shared texture.
-  pCLTarget = new RenderTarget( WIDTH, HEIGHT, GL_RGBA, GL_RGBA, GL_FLOAT, 0, false );
+  pCLTarget = new RenderTarget( WIDTH, HEIGHT, GL_RGBA , GL_RGBA, GL_FLOAT, 0, false );
   checkGLErr( "RenderTarget::RenderTarget" );
   pAccumulator = new RenderTarget( WIDTH, HEIGHT, GL_RGBA, GL_RGBA, GL_FLOAT, 0, false );
   checkGLErr( "RenderTarget::RenderTarget" );
@@ -285,7 +285,7 @@ int main(int argc, char** argv){
   spheres[2].center = glm::vec4( +1.5f, 2.7f, +1.5f, 0.0f);
   spheres[2].radius = 0.3f;
 
-  
+
   spheres[3].uSurf = 2;
   spheres[3].center = glm::vec4( +1.5f, 2.7f, -1.5f, 0.0f);
   spheres[3].radius = 0.3f;
@@ -293,7 +293,7 @@ int main(int argc, char** argv){
   /*spheres[4].uSurf = 2;
   spheres[4].center = glm::vec4( -1.5f, -0.7f, -1.5f, 0.0f);
   spheres[4].radius = 0.3f;
-  
+
   spheres[5].uSurf = 2;
   spheres[5].center = glm::vec4( -1.5f, -0.7f, +1.5f, 0.0f);
   spheres[5].radius = 0.3f;*/
@@ -332,13 +332,13 @@ int main(int argc, char** argv){
 
   cl::Buffer clImgDesc( context, CL_MEM_READ_ONLY, 1 * sizeof( ImageDescriptor ) );
   checkErr(err, "Buffer::Buffer()");
-  
+
   cl::Buffer clSeed( context, CL_MEM_READ_WRITE, WIDTH * HEIGHT * 4 * sizeof( uint ) );
   checkErr(err, "Buffer::Buffer()");
-  
+
   cl::Buffer clSurf( context, CL_MEM_READ_WRITE, inSurf * sizeof( Surface ) );
   checkErr(err, "Buffer::Buffer()");
-  
+
   cl::ImageGL imgGL( context, CL_MEM_WRITE_ONLY, GL_TEXTURE_2D, 0, pCLTarget->getColorTexture()->glGetInternalTexture(), &err );
   checkErr(err, "ImageGL::ImageGL()");
 
@@ -398,7 +398,7 @@ int main(int argc, char** argv){
   checkErr(err, "Kernel::setArg()");
   err = kernel.setArg(9, clSurf);
   checkErr(err, "Kernel::setArg()");
-  
+
   std::cout<<"Built Kernel"<< std::endl;
 
   pCamera = new ModelCamera( window );
