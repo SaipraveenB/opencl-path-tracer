@@ -4,6 +4,6 @@ struct ImageDescriptor
 {
     int numSamples;
     int bChanged;
-    int reserved0;
+    int sampleRate;
     int reserved1;
 };

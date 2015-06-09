@@ -7,7 +7,6 @@
     /*Texture::Texture( ){
       Texture( GL_TEXTURE_2D_MULTISAMPLE );
     }*/
-
     Texture::Texture( GLenum bindTarget ){
         eInternalFormat = GL_RGBA;
         eFormat = GL_RGBA;
@@ -15,6 +14,10 @@
         eBindTarget = bindTarget;
         glInit();
 
+    }
+
+    Texture::~Texture(){
+        glDeleteTextures( 1, &glTexBuf );    
     }
 
     Texture::Texture( GLenum bindTarget, GLint pTex ){

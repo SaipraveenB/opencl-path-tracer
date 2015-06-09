@@ -17,6 +17,7 @@ class RenderTarget{
 public:
   RenderTarget( int width, int height, int, bool );
   RenderTarget( int width, int height, GLenum internalFormat, GLenum format, GLenum type, int, bool );
+  ~RenderTarget();
   void glBind();
   void glBind( GLenum target );
   void glInit();

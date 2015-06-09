@@ -16,13 +16,13 @@ class Texture{
     Texture( GLenum bindTarget );
     Texture( GLenum bindTarget, GLint pTex );
     Texture();
+    ~Texture();
     void setTextureDataFormat( GLenum internalFormat, GLenum format, GLenum type );
     void setBindTarget( GLenum bindTarget );
     void glActivate( GLenum texChannel );
     void glInit();
     void glBind();
     GLuint glGetInternalTexture();
-
 };
 
 class FileTexture : public Texture{

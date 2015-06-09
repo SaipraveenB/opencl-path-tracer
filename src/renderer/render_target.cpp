@@ -14,6 +14,10 @@
     glGenFramebuffers( 1, &fbo );
     glInit();
   }
+
+  RenderTarget::~RenderTarget(){
+    delete pTex;
+  }
   Texture* RenderTarget::getColorTexture(){
     return pTex;
   }

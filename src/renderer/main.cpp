@@ -32,8 +32,10 @@ OpenCL entry point
 
 
 
-#define WIDTH 640
-#define HEIGHT 480
+#define WIDTH 1280
+#define HEIGHT 720
+#define SAMPLES 4
+
 #define FPS_INTERVAL 0.5
 
 inline void checkErr(cl_int err, const char * name) {
@@ -126,7 +128,7 @@ void mainLoop( cl::CommandQueue& queue, cl::Context& context, cl::Kernel kernel,
   eRelease.wait();
 
 
-  imgDesc.numSamples += 20;
+  imgDesc.numSamples += SAMPLES;
 
   pAccumulator->glBind( GL_DRAW_FRAMEBUFFER );
   checkGLErr( "glBind GL_DRAW_FRAMEBUFFER, Accumulator " );
@@ -147,7 +149,7 @@ void mainLoop( cl::CommandQueue& queue, cl::Context& context, cl::Kernel kernel,
   pCamera->glfwHandleCursor( ((float)(tf - ti))/(CLOCKS_PER_SEC * 1.0f) );
   if( sceneChanged() ){
     //printf("scene changed..!");
-    imgDesc.numSamples = 1;
+    imgDesc.numSamples = 2;
     CLCamera* cam = pCamera->getCLCamera();
     queue.enqueueWriteBuffer( clCamera, CL_TRUE, 0, 1 * sizeof(CLCamera), (const void*)cam );
     delete cam;
@@ -237,7 +239,7 @@ int main(int argc, char** argv){
   CGLContextObj kCGLContext = CGLGetCurrentContext();
   CGLShareGroupObj kCGLShareGroup = CGLGetShareGroup(kCGLContext);
   cl_context_properties cprops[6] = {CL_CONTEXT_PLATFORM, (cl_context_properties)(platformList[0])(),CL_CONTEXT_PROPERTY_USE_CGL_SHAREGROUP_APPLE , (cl_context_properties) kCGLShareGroup, 0, 0};
-  cl::Context context( CL_DEVICE_TYPE_CPU, cprops, NULL, NULL, &err);
+  cl::Context context( CL_DEVICE_TYPE_GPU, cprops, NULL, NULL, &err);
   #endif
 
   #ifdef __linux__
@@ -265,7 +267,7 @@ int main(int argc, char** argv){
   pAccumulator = new RenderTarget( WIDTH, HEIGHT, GL_RGBA, GL_RGBA, GL_FLOAT, 0, false );
   checkGLErr( "RenderTarget::RenderTarget" );
 
-  const int inSizeS = 2;
+  const int inSizeS = 6;
   const int inSizeT = 1;
   const int inSizeP = 1;
   const int inSurf = 3;
@@ -277,28 +279,28 @@ int main(int argc, char** argv){
   Sphere* spheres = new Sphere[inSizeS];
   std::cout<<"Sphere: "<< spheres[0].radius << "\n";
   spheres[0].uSurf = 0;
-  spheres[0].center = glm::vec4( 0.0f, 0.0f, 0.0f, 0.0f );
-  /*spheres[1].uSurf = 0;
-  spheres[1].center = glm::vec4( 0.0f, 2.0f, 0.0f, 0.0f);
-  spheres[1].radius = 1.0f;*/
+  spheres[0].center = glm::vec4( 0.0f, 1.414f, 0.0f, 0.0f );
+  
+  spheres[1].uSurf = 0;
+  spheres[1].center = glm::vec4( +1.0f, 0.0f, +1.0f, 0.0f);
+  spheres[1].radius = 1.0f;
 
-  spheres[1].uSurf = 2;
-  spheres[1].center = glm::vec4( 10.5f, 10.7f, 10.5f, 0.0f);
-  spheres[1].radius = 6.0f;
+  spheres[2].uSurf = 2;
+  spheres[2].center = glm::vec4( 2.0f, -0.6f, 2.0f, 0.0f);
+  spheres[2].radius = 0.4f;
 
 
-  /*spheres[3].uS
->>>>>>> 7937dd2409347655f2b1515fbbcab51b2924ea7a
-  spheres[3].center = glm::vec4( +1.5f, 2.7f, -1.5f, 0.0f);
-  spheres[3].radius = 0.3f;
+  spheres[3].uSurf = 0;
+  spheres[3].center = glm::vec4( +1.0f, 0.0f, -1.0f, 0.0f);
+  spheres[3].radius = 1.0f;
 
-  /*spheres[4].uSurf = 2;
-  spheres[4].center = glm::vec4( -1.5f, -0.7f, -1.5f, 0.0f);
-  spheres[4].radius = 0.3f;
+  spheres[4].uSurf = 0;
+  spheres[4].center = glm::vec4( -1.0f, -0.0f, -1.0f, 0.0f);
+  spheres[4].radius = 1.0f;
 
-  spheres[5].uSurf = 2;
-  spheres[5].center = glm::vec4( -1.5f, -0.7f, +1.5f, 0.0f);
-  spheres[5].radius = 0.3f;*/
+  spheres[5].uSurf = 0;
+  spheres[5].center = glm::vec4( -1.0f, -0.0f, +1.0f, 0.0f);
+  spheres[5].radius = 1.0f;
   Plane* planes = new Plane[inSizeP];
   //std::cout<<"Sphere: "<< planes[0].radius << "\n";
   planes[0].normal = glm::vec4( 0.0f, 1.0f, 0.0f, 0.0f );
@@ -315,7 +317,7 @@ int main(int argc, char** argv){
   pSurf[0].vColor = glm::vec4( 1.0f, 1.0f, 0.0f, 1.0f );
   pSurf[1].vColor = glm::vec4( 0.9f, 0.9f, 0.9f, 0.5f );
   pSurf[2].vColor = glm::vec4( 0.0f, 1.0f, 0.0f, 1.0f );
-  pSurf[2].vEmissive = glm::vec4( 4.5f, 4.5f, 4.5f,4.0f );
+  pSurf[2].vEmissive = glm::vec4( 60.0f, 60.0f, 60.0f, 60.0f );
 
   cl::Buffer clSpheres( context, CL_MEM_READ_ONLY, inSizeS * sizeof( Sphere ));
   checkErr(err, "Buffer::Buffer()");
@@ -407,7 +409,7 @@ int main(int argc, char** argv){
   pCamera->setSpeedX( 0.03f );
   pCamera->setSpeedY( 0.03f );
 
-  pCamera->setRadius( 5.0f );
+  pCamera->setRadius( 8.0f );
   pCamera->setOrientation( glm::vec3( 0.0f, -1.0f, 0.0f ) );
   pCamera->reset( glm::vec3( 1.0f, 0.1f, -0.1f ) );
 
@@ -437,7 +439,7 @@ int main(int argc, char** argv){
 
   //Initialise counter.
   imgDesc.numSamples = 0;
-
+  imgDesc.sampleRate = SAMPLES;
   cLast = clock();
   while( !glfwWindowShouldClose( window ) ){
     //usleep( 1000000 );
