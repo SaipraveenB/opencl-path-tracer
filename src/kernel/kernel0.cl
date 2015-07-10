@@ -1,11 +1,16 @@
 #pragma OPENCL EXTENSION cl_khr_byte_addressable_store : enable
-#define PIX_X 640
-#define PIX_Y 360
+#define PIX_X 533
+#define PIX_Y 460
 
-#define WIDTH 1280
-#define HEIGHT 720
+#define WIDTH 1067
+#define HEIGHT 600
 #define SAMPLES 10
 
+
+//#define CMD_DEBUG
+//#define INDIRECT_ONLY
+
+#define BLUR_FACTOR 2.0f
 #ifdef CMD_DEBUG
 #define cmdlog(x, ...) if( PIX_X == get_global_id(0) && PIX_Y == get_global_id(1) ) printf(x, __VA_ARGS__);
 #else
@@ -54,8 +59,8 @@ typedef struct _FullIntersection{
 
 typedef struct _GeometryDescriptor{
   int numSpheres;
-  int numTriangles;
   int numPlanes;
+  int numTriangles;
 } GeometryDescriptor;
 
 typedef struct _ImageDescriptor{
@@ -161,18 +166,18 @@ float4 random_sample_cone( private uint4* state, int k, float4 vDir, float halfA
         //vecRand = (float4) (1.0f,0.0f,0.0f, 0.0f);
 
     float4 vPerp = fast_normalize( cross( vDir, vecRand ) );
-    // Form the third perpendicular vector for an orthonormal set.
+    // Form the third perpendicular vector for an orthonormal set. 	
     float4 vPerp2 = cross( vDir, vPerp );
 
-    cmdlog("vPerp: %f, %f, %f, %f\n", vPerp.x, vPerp.y, vPerp.z, vPerp.w);
-    cmdlog("vPerp2: %f, %f, %f, %f\n", vPerp2.x, vPerp2.y, vPerp2.z, vPerp2.w);
+    //cmdlog("vPerp: %f, %f, %f, %f\n", vPerp.x, vPerp.y, vPerp.z, vPerp.w);
+    //cmdlog("vPerp2: %f, %f, %f, %f\n", vPerp2.x, vPerp2.y, vPerp2.z, vPerp2.w);
     // treat p0 as lift angle and p1 as sweep angle.
 
     // trasform p1 from (0,1) to (-1,+1)
     p1 = p1*6.283185307f;
     p0 = ( 1.0f - ( acos(p0) * 2.0f * M_1_PI ) ) * halfAngle;
     //p0 = half_sqrt( p0 ) * halfAngle;
-    cmdlog("p0,p1: %f,%f\n", p0, p1);
+    //cmdlog("p0,p1: %f,%f\n", p0, p1);
 
     float4 ray = ( native_cos( p0 ) * vDir ) + ( native_sin( p0 ) * ( native_cos( p1 ) * vPerp + native_sin( p1 ) * vPerp2 ) );
     //ray.w = 0.0f;
@@ -188,8 +193,8 @@ float2 findRandomPoint(private uint4* state, int k, float2 pix)
     float2 newPt;
     float scaleX = get_rng_float(state,k);
     float scaleY = get_rng_float(state,k);
-    float deltaX = native_divide( 15.0f, (float)WIDTH );
-    float deltaY =  native_divide( 15.0f, (float)HEIGHT );
+    float deltaX = native_divide( BLUR_FACTOR, (float)WIDTH );
+    float deltaY =  native_divide( BLUR_FACTOR, (float)HEIGHT );
     newPt.x = pix.x + scaleX*deltaX;
     newPt.y = pix.y + scaleY*deltaY;
     cmdlog(":%f, %f\n", newPt.x, newPt.y);
@@ -230,7 +235,9 @@ Intersection rayPlaneIntersect( float4 vPos, float4 vDir, __global Plane* plane,
     cmdlog("vPos %f, %f, %f\n", vPos.x, vPos.y, vPos.z);
     cmdlog("vDir %f, %f, %f\n", vDir.x, vDir.y, vDir.z);
     cmdlog("i %d\n", i);
-    cmdlog("plane.normal %f, %f, %f\n", plane[i].normal.x, plane[i].normal.y, plane[i].normal.z);*/
+    cmdlog("plane.normal %f, %f, %f\n", plane[i].normal.x, plane[i].normal.y, plane[i].normal.z);
+	cmdlog("plane.pt %f, %f, %f\n", plane[i].pt.x, plane[i].pt.y, plane[i].pt.z);
+	cmdlog("plane.uSurf %d\n", (int)plane[i].uSurface);*/
 
     private Plane pl = plane[i];
 
@@ -240,17 +247,24 @@ Intersection rayPlaneIntersect( float4 vPos, float4 vDir, __global Plane* plane,
     x.bInter = 0;
 
     float angle = dot(vDir, pl.normal);
-    if(angle == 0)
+	
+	// Enable backface culling.. necesary for creating an enclosure using planes.
+    if(angle >= 0)
         return x;
+	
 
-    float desc = dot(dot(pl.pt - vPos, pl.normal)*pl.normal, vDir);
-    if( desc > 0 )
+	float temp = dot(pl.pt - vPos, pl.normal);
+    float desc = dot(temp*pl.normal, vDir);
+    if( desc > 0 ){
+		
         x.bInter = 1;
+	}
     
-    float k = native_divide( dot( pl.normal, pl.pt - vPos ), dot( pl.normal, vDir ) );
+    float k = native_divide( temp, angle );
     x.vPos = k * vDir + vPos;
     x.vDir = pl.normal;
-
+	
+	
     //cmdlog("intPoint.vPos %f, %f, %f\n", x.vPos.x, x.vPos.y, x.vPos.z);
     //cmdlog("intPoint.bInter %d\n", x.bInter);
     return x;
@@ -258,29 +272,42 @@ Intersection rayPlaneIntersect( float4 vPos, float4 vDir, __global Plane* plane,
 
 Intersection rayTriangleIntersect(  float4 vPos, float4 vDir, __global Triangle* delta, int i )
 {
+    /*cmdlog("\nTriangleInt\n", 0);
+    cmdlog("vPos %f, %f, %f\n", vPos.x, vPos.y, vPos.z);
+    cmdlog("vDir %f, %f, %f\n", vDir.x, vDir.y, vDir.z);
+    cmdlog("i %d\n", i);
+    cmdlog("delta.a %f, %f, %f\n", delta[i].a.x, delta[i].a.y, delta[i].a.z);
+	cmdlog("delta.b %f, %f, %f\n", delta[i].b.x, delta[i].b.y, delta[i].b.z);
+	cmdlog("delta.uSurf %d\n", (int)delta[i].uSurface);*/
+	
     Intersection intPoint;
     intPoint.bInter = 0;
     float4 normal = normalize(cross(delta[i].b - delta[i].a, delta[i].c - delta[i].a));
     float val = dot(vDir,normal);
 
-    if(val == 0)
+    if(val > 0)
         return intPoint;
 
     float lineDist = dot(delta[i].a - vPos,normal)/val;
+	if( lineDist < 0 )
+		return intPoint;
+	
     float4 point = vPos + lineDist*vDir;
-
+    //cmdlog("point %f, %f, %f\n", point.x, point.y, point.z);
     //Check if the point lies inside the triangle.
     float dotA = dot(cross(point-delta[i].a,delta[i].c-delta[i].a),normal);
     float dotB = dot(cross(point-delta[i].c,delta[i].b-delta[i].c),normal);
     float dotC = dot(cross(point-delta[i].b,delta[i].a-delta[i].b),normal);
 
+    //cmdlog("dotA, dotB, dotC %f, %f, %f\n", dotA, dotB, dotC);
     //Either of the 3 dot products is negative if point is outside traingle.
     if(dotA <0 || dotB < 0 || dotC < 0)
         return intPoint;
 
-    intPoint.bInter = i;
+    intPoint.bInter = 1;
     intPoint.vPos = point;
-
+    //cmdlog("intPoint.vPos %f, %f, %f\n", intPoint.vPos.x, intPoint.vPos.y, intPoint.vPos.z);
+    //cmdlog("intPoint.bInter %d\n", intPoint.bInter);
     return intPoint;
 }
 
@@ -365,11 +392,11 @@ FullIntersection ray_intersect( float4 vPos, float4 vDir, __global Sphere* pSphe
 
       inter = raySphereIntersect( vPos, vDir, pSpheres, i );
       //printf("%d, %d: Sphere: %d\n", get_global_id(0), get_global_id(1), inter.bInter);
-      cmdlog( "inter with %d: %d\n", i, inter.bInter );
+      //cmdlog( "sphere: inter with %d: %d\n", i, inter.bInter );
       if( inter.bInter != 0 ){
 
         float dist = distance( inter.vPos, vPos );
-        cmdlog( "dist: %f\n", dist  );
+        //cmdlog( "sphere: dist: %f\n", dist  );
         if( dist < minDist ){
           minDist = dist;
           currInter = inter;
@@ -380,15 +407,20 @@ FullIntersection ray_intersect( float4 vPos, float4 vDir, __global Sphere* pSphe
       }
 
     }
-
+	
+	//cmdlog("numPLanes: %d\n", pDescriptor[0].numPlanes);
+	
     for(int i=0;i < pDescriptor[0].numPlanes;i++)
     {
       if( originPrim == 1 && originIndex == (uint)i )
         continue;
       inter = rayPlaneIntersect( vPos, vDir, pPlanes, i );
       //printf("%d, %d: Plane: %d\n", get_global_id(0), get_global_id(1), inter.bInter);
+	  //cmdlog( "plane: inter with %d: %d\n", i, inter.bInter );
       if( inter.bInter != 0 ){
+
         float dist = distance( inter.vPos, vPos );
+		//cmdlog( "plane: dist: %f\n", dist  );
         if( dist < minDist ){
           minDist = dist;
           primType = 1;
@@ -500,7 +532,7 @@ float4 brdf_lambertian_imp( FullIntersection patch, float4 vPos, float4 vDir, fl
     float high = ( 1.0f/solid ) * 0.5f * lightWeight + (float)M_1_PI * 0.5f * ( 1 - lightWeight );
     //float high = (float)M_1_PI * 0.5f * ( 1 - lightWeight );
 
-    cmdlog("LAMBERT_IMPORTANCE: %f, %f, %f, %f, %f\n", p4, solid, low, high, lightWeight );
+    //cmdlog("LAMBERT_IMPORTANCE: %f, %f, %f, %f, %f\n", p4, solid, low, high, lightWeight );
     
     if( p4 > lightWeight )
         launchDir.w = ( low ); 
@@ -510,6 +542,326 @@ float4 brdf_lambertian_imp( FullIntersection patch, float4 vPos, float4 vDir, fl
     return launchDir;
 }
 
+// Surface Samplers for lighting.
+
+FullIntersection sampleSphereSurface( __global Surface* pSurface, __global Sphere* pSphere, int i, private uint4* state ){
+    FullIntersection fint;
+
+    float p0 = get_rng_float( state, 0 );
+    float p1 = get_rng_float( state, 0 );
+	
+	p0 = p0 * M_PI;
+	p0 = acos( 1 - ( 2.0f * M_1_PI * p0 ) );
+	
+	p1 = p1 * 2.0f * M_PI;
+
+    float4 vDir = (float4)( native_sin( p0 ) * native_sin( p1 ), native_cos( p0 ), native_sin( p0 ) * native_cos( p1 ), 0.0f);
+    fint.kInter.vPos = pSphere[i].vPos + pSphere[i].fRadius * vDir;
+    fint.kInter.bInter = 1;
+    fint.vDir = vDir;
+
+    fint.vEmissive = pSurface[pSphere[i].uSurface].vEmissive;
+    
+	cmdlog("Light position: %f,%f,%f,%f\n", fint.kInter.vPos.x, fint.kInter.vPos.y, fint.kInter.vPos.z, fint.kInter.vPos.w );
+	cmdlog("Light direction: %f,%f,%f,%f\n", fint.vDir.x, fint.vDir.y, fint.vDir.z, fint.vDir.w );
+	cmdlog("Light vEmissive: %f,%f,%f,%f\n", fint.vEmissive.x, fint.vEmissive.y, fint.vEmissive.z, fint.vEmissive.w );	
+    return fint;
+}
+
+__kernel void bi_directional_path_trace( 
+                          __global Camera* pCamera,
+                          __write_only image2d_t imgOut,
+                          __read_only image2d_t imgIn,
+                          __global Sphere* pSpheres,
+                          __global Plane* pPlanes,
+                          __global Triangle* pTriangles,
+                          __global GeometryDescriptor* pDesc,
+                          __global ImageDescriptor* pImgDesc,
+                          __global uint4* randSeed,
+                          __global Surface* pSurfaces
+                          )
+{
+    size_t x = get_global_id(0);
+    size_t y = get_global_id(1);
+
+    float4 prevValue = read_imagef( imgIn, sampler, (int2)(x,y) );
+    int numSamples = pImgDesc[0].numSamples;
+
+    private uint4 state = randSeed[x*HEIGHT + y];
+
+    rng_next( &state, x*HEIGHT + y );
+   //if( x == PIX_X && y == PIX_Y )
+   /*cmdlog("\nX,Y: %d, %d\n", x, y);
+    cmdlog("samples: %d\n", pImgDesc[0].numSamples);
+    cmdlog("prevValue: %f, %f, %f, %f\n", prevValue.x, prevValue.y, prevValue.z, prevValue.w);*/
+    //cmdlog("sizeof Plane: %d\n", sizeof(Plane) );
+	cmdlog("\n\n\n",0);
+    // Normalized coords.
+    float xf = native_divide( ((float)x), WIDTH*1.0f );
+    float yf = native_divide( ((float)y), HEIGHT*1.0f );
+
+    float xt = (xf*2.0 - 1.0f) * ( WIDTH*1.0f / HEIGHT);
+    float yt = yf*2.0 - 1.0f;
+
+
+//    int samples = pImgDesc[0].sampleRate;
+
+
+
+    //for( int k = 0; k < samples; k++ ){
+
+    float2 screen = findRandomPoint( &state, x*HEIGHT + y, (float2)( xt, yt ) );
+
+    float4 ray = (shoot_ray( screen, pCamera ));
+
+    FullIntersection patch;// = ray_intersect( pCamera[0].vPos, ray, pSpheres, pPlanes, pTriangles, pDesc, pSurfaces, -1, -1 );
+
+    // Second intersection.
+
+
+    FullIntersection eyePatch;
+    eyePatch.vDir = ray;
+    eyePatch.kInter.vPos = pCamera[0].vPos;
+    eyePatch.uPrimType = 4;
+    eyePatch.uIndex = 0;
+
+    float4 col = (float4)(1.0f,1.0f,1.0f,1.0f);
+    int i = 0;
+
+    float4 eyeRef = eyePatch.vDir;
+    float4 eyePos = eyePatch.kInter.vPos + eyePatch.vDir * 0.00001f;// Push slightly to avoid self-intersection.            
+
+    FullIntersection firstPatch = ray_intersect( eyePos, eyeRef, pSpheres, pPlanes, pTriangles, pDesc, pSurfaces, eyePatch.uPrimType, eyePatch.uIndex );
+
+    // Unwrap target point. Soon this needs to be an array.
+    float4 vTestPos = firstPatch.kInter.vPos;
+	
+    // Handle case where ray strikes emissive surface.
+	
+	
+    if( firstPatch.kInter.bInter )
+    {
+		cmdlog("First HIT %d, %d\n", firstPatch.uPrimType, firstPatch.uIndex); 
+		if( firstPatch.vEmissive.w != 0.0f ){
+        	// Break.. we have no further job here.
+       		cmdlog("DIRECT HIT LIGHT: %d, %d\n", firstPatch.uPrimType, firstPatch.uIndex); 
+        	write_imagef( imgOut, (int2)(x,y), firstPatch.vDiffuse );
+		    return;
+		}
+		
+    }else{
+		cmdlog("No Intersection: \n", 0);
+        write_imagef( imgOut, (int2)(x,y), (float4)(0,0,0,0) );
+        return;
+    }
+	
+
+    float4 incomingDir = (float4)( 0.0f, 0.0f, 0.0f, 0.0f );
+
+    
+    // Hardcode light values.. soon to be streamed in from host program.
+    int lIndex = 0;
+    int lType = 0;
+
+    
+    // Find the point from light's surface.
+
+    FullIntersection lightPatch = sampleSphereSurface( pSurfaces, pSpheres, lIndex, &state );
+    float4 light0Ref = lightPatch.vDir;
+    float4 light0Pos = lightPatch.kInter.vPos + lightPatch.vDir * 0.00001f;// Push slightly to avoid self-intersection.            
+    //float4 light0Dir;
+
+    // Set initial patch to lightPatch to simulate ray strike from there.
+    patch = lightPatch;
+
+    // Assume lambertian BRDF for light patch.
+    //float4 light0Dir = brdf_lambertian( patch, (float4)(0,0,0,0), incomingDir, &state, x*HEIGHT + y );
+
+    // Set maximum no of reflections for light ray traversal.
+    
+
+    int maxL = 5;
+
+    int maxE = 1;
+
+    float pCon = 0.8f;
+    // Initialize full contribution to full spectral 0.
+    float4 fullContrib = (float4)(0,0,0,0);
+
+    // Accumulator that's diluted every step.
+    float4 accContrib = (float4)(1,1,1,1);
+	
+	float preFactor = (1 - pCon)/(1 - pow( pCon, maxL ));
+	int samplesTaken = 0;
+	for( int lti = 0; lti < maxL; lti ++ ){
+        // Check contribution of current patch to vTestPos.
+		cmdlog("\n bounce %d\n", lti);
+    	float4 testDir = normalize( vTestPos - patch.kInter.vPos );
+		cmdlog("testPos: %f, %f, %f, %f\n", vTestPos.x, vTestPos.y, vTestPos.z, vTestPos.w );
+		cmdlog("light patch pos: %f, %f, %f, %f\n", patch.kInter.vPos.x, patch.kInter.vPos.y, patch.kInter.vPos.z, patch.kInter.vPos.w );
+		cmdlog("ray direction: %f, %f, %f, %f\n", testDir.x, testDir.y, testDir.z, testDir.w );
+		
+		cmdlog("test criteria: %d, %d\n", firstPatch.uPrimType, firstPatch.uIndex );
+		FullIntersection testPatch = ray_intersect( patch.kInter.vPos, testDir, pSpheres, pPlanes, pTriangles, pDesc, pSurfaces, patch.uPrimType, patch.uIndex );
+		
+		cmdlog("test results: %d, %d\n", testPatch.uPrimType, testPatch.uIndex );
+		cmdlog("test results POS: %f, %f, %f, %f\n", testPatch.kInter.vPos.x, testPatch.kInter.vPos.y, testPatch.kInter.vPos.z, testPatch.kInter.vPos.w );
+		float4 contrib = (float4)(0,0,0,0);
+		
+		
+		if( firstPatch.uPrimType == testPatch.uPrimType && firstPatch.uIndex == testPatch.uIndex ){
+			//if( dot( firstPatch.vDir, testPatch.vDir ) < 0 ){
+			if( length( vTestPos - testPatch.kInter.vPos ) < 0.0001f && dot( firstPatch.vDir, testPatch.vDir ) > 0 ){
+				cmdlog("LOS acheived.\n", 0);
+				float4 ptVec = testPatch.kInter.vPos - patch.kInter.vPos;
+				ptVec = ptVec;
+				
+				float samplingFactor = native_divide( 1, (float)( ptVec.x*ptVec.x + ptVec.y*ptVec.y + ptVec.z*ptVec.z ) );
+				//float samplingFactor = native_divide( 1, 1 + length( ptVec ) );
+				
+				float r = length( ptVec ) * 1.0f;
+				//cmdlog("distance: %f", r);
+				//float samplingFactor = 1 - native_divide( r, half_sqrt( r*r + 0.0001f ) );
+				
+				//if( r < 0.0f )
+				//	samplingFactor = 0.0f;
+				
+				
+				float impFactor = preFactor;
+				
+				float directionalFactor = dot( firstPatch.vDir, testDir ) * dot( patch.vDir, testDir ); 
+				directionalFactor *= sign( directionalFactor );
+				//if( lti != 0 )
+				//	samplingFactor = 1.0f;
+				//else 
+				//	directionalFactor = 1.0f;
+				
+				cmdlog("LOS sf: %f, df: %f\n", samplingFactor, directionalFactor);
+				
+				contrib = accContrib * samplingFactor * directionalFactor * native_divide( 1, impFactor );
+				
+			}
+		}
+		preFactor *= pCon;
+		
+		cmdlog("Adding contrib: %f, %f, %f, %f\n", contrib.x, contrib.y, contrib.z, contrib.w); 
+		// The 1.0f is the BRDF of the first patch from the eye. we're assuming perfect lambertian. se we set it to 1.0f.
+		
+		
+		// temprarily reject direct light.
+#ifdef INDIRECT_ONLY
+		if( lti != 0 )
+#endif
+		fullContrib += contrib;
+		
+		samplesTaken++;
+		
+		
+		float4 launchRef = patch.vDir;
+		float4 launchPos = patch.kInter.vPos + patch.vDir * 0.00001f;// Push slightly to avoid self-intersection.
+
+		float4 launchDir;
+
+		// Soon this part has to be
+		
+		launchDir = brdf_lambertian( patch, (float4)(0,0,0,0), incomingDir, &state, x*HEIGHT + y );
+
+		//if( lti == 0 )
+		//	launchDir = launchRef;
+		// Weight at this point.
+		float wt = launchDir.w;
+		launchDir.w = 0.0f;
+
+		// If the ray is just originating from the sphere.
+
+		if( lti == 0 )
+			wt = 0.0f;
+
+		// Contrib so far is unitary.. contribution for the joining ray is computed by using actual BRDF values since it's an operation dependent on 
+		// complex geometry and as such can't be efficiently simulated.
+		// So random sampling is now uniform and brdf values are used for manipulation.
+		
+
+		// roll dice to determine path's fate.
+		// But will this bias the estimator?
+		float fate = get_rng_float( &state, 0 );
+		if( fate > pCon ){
+			break;
+		}
+
+		// Carry on to another place.
+		FullIntersection target = ray_intersect( launchPos, launchDir, pSpheres, pPlanes, pTriangles, pDesc, pSurfaces, patch.uPrimType, patch.uIndex );
+    
+		// Obtain patch information
+		if( target.kInter.bInter ){
+			if( target.vEmissive.w != 0.0f ){
+				//cmdlog( "weight: %f\n", wt );
+				//col *= ((float4)patch2.vEmissive/wt) * ( (float)M_1_PI * 0.5f );// sky color.
+
+				cmdlog("%d HIT LIGHT %d,%d\n", i, target.uPrimType, target.uIndex);
+				// Break here.. we accidentally seem to have run into a light.
+				break;
+			}
+			//cmdlog( "weight: %f\n", wt );
+			//col *= ( (float4)patch2.vDiffuse/wt * (float)M_1_PI * 0.5f );
+			cmdlog("%d HIT %d,%d\n", i, target.uPrimType, target.uIndex);
+		}else{
+			//col *= (float4)(0.3f, 0.3f, 0.4f, 0.3f);// sky color.
+			//accContrib *= 0.0f;
+			cmdlog("%d Miss\n", i);
+			break;
+		}
+		
+		float directionalFactor = -dot( target.vDir, launchDir ) * dot( launchDir, launchRef );
+		directionalFactor *= sign( directionalFactor );
+		float4 ptVec = ( launchPos - target.kInter.vPos );
+		float samplingFactor = native_divide( 1, 1 + (float)( ptVec.x*ptVec.x + ptVec.y*ptVec.y + ptVec.z*ptVec.z ) );
+		//float samplingFactor = native_divide( 1, 1 + length( ptVec ) );
+		
+		//if( lti != 0 ) samplingFactor = 1.0f;
+		samplingFactor = 1.0f;
+		//else directionalFactor = 1.0f;
+		directionalFactor = 1.0f;
+		
+		cmdlog("sf: %f, df: %f\n", samplingFactor, directionalFactor);		
+     	accContrib *= target.vDiffuse * 1.0f * samplingFactor * directionalFactor;
+		
+		//col = patch.vDiffuse * col;
+		
+		incomingDir = launchDir;
+		patch = target;
+    }
+    
+    
+    // Do light_intensity * sigma(contrib) * patch_brdf to get final spectral intensity.
+	float4 ptVec = ( firstPatch.kInter.vPos - eyePatch.kInter.vPos );
+	float samplingFactor = native_divide( 1, 1 + (float)( ptVec.x*ptVec.x + ptVec.y*ptVec.y + ptVec.z*ptVec.z ) ); 
+	samplingFactor = 1.0f;
+	if( samplesTaken == 0.0f )
+		col = (float)(0,0,0,0);
+    else
+#ifdef INDIRECT_ONLY
+		col = lightPatch.vEmissive * fullContrib * samplingFactor  * native_divide( 1.0f, samplesTaken );// * firstPatch.vDiffuse;
+#else
+		col = lightPatch.vEmissive * fullContrib * samplingFactor  * native_divide( 1.0f, samplesTaken ) * firstPatch.vDiffuse;
+#endif
+    //col = (float4) (1.0f, 1.0f, 1.0f, 1.0f);
+	
+	cmdlog("numSamples: %d\n", numSamples);
+    cmdlog("final col: %f, %f, %f, %f; \n", col.x, col.y, col.z, col.w );
+
+    float4 newSample = col;
+    float4 currSample = prevValue * native_divide( ((float)numSamples), (numSamples + 1)) + newSample * native_divide( 1.0f, (float)(numSamples + 1) );
+    if( numSamples == 0 )
+      currSample = newSample;
+	
+    prevValue = currSample;
+    numSamples ++;
+
+    randSeed[x*HEIGHT + y] = state;
+
+    write_imagef( imgOut, (int2)(x,y), currSample );
+}
 
 // TODO: Need another kernel for quickly building octree out of Sphere, Triangle and Plane.
 /*
@@ -517,7 +869,7 @@ float4 brdf_lambertian_imp( FullIntersection patch, float4 vPos, float4 vDir, fl
   Spheres, Planes and Triangles.
   Triangles are extremely versatile as they can be made into
 */
-__kernel void path_trace( __global Camera* pCamera,
+/*__kernel void path_trace( __global Camera* pCamera,
                           __write_only image2d_t imgOut,
                           __read_only image2d_t imgIn,
                           __global Sphere* pSpheres,
@@ -646,4 +998,4 @@ __kernel void path_trace( __global Camera* pCamera,
     randSeed[x*HEIGHT + y] = state;
 
     write_imagef( imgOut, (int2)(x,y), prevValue );
-}
+}*/

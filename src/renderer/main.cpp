@@ -32,9 +32,9 @@ OpenCL entry point
 
 
 
-#define WIDTH 1280
-#define HEIGHT 720
-#define SAMPLES 4
+#define WIDTH 1067
+#define HEIGHT 600
+#define SAMPLES 1
 
 #define FPS_INTERVAL 0.5
 
@@ -149,7 +149,7 @@ void mainLoop( cl::CommandQueue& queue, cl::Context& context, cl::Kernel kernel,
   pCamera->glfwHandleCursor( ((float)(tf - ti))/(CLOCKS_PER_SEC * 1.0f) );
   if( sceneChanged() ){
     //printf("scene changed..!");
-    imgDesc.numSamples = 2;
+    imgDesc.numSamples = 0;
     CLCamera* cam = pCamera->getCLCamera();
     queue.enqueueWriteBuffer( clCamera, CL_TRUE, 0, 1 * sizeof(CLCamera), (const void*)cam );
     delete cam;
@@ -239,7 +239,7 @@ int main(int argc, char** argv){
   CGLContextObj kCGLContext = CGLGetCurrentContext();
   CGLShareGroupObj kCGLShareGroup = CGLGetShareGroup(kCGLContext);
   cl_context_properties cprops[6] = {CL_CONTEXT_PLATFORM, (cl_context_properties)(platformList[0])(),CL_CONTEXT_PROPERTY_USE_CGL_SHAREGROUP_APPLE , (cl_context_properties) kCGLShareGroup, 0, 0};
-  cl::Context context( CL_DEVICE_TYPE_GPU, cprops, NULL, NULL, &err);
+  cl::Context context( CL_DEVICE_TYPE_CPU, cprops, NULL, NULL, &err);
   #endif
 
   #ifdef __linux__
@@ -267,10 +267,10 @@ int main(int argc, char** argv){
   pAccumulator = new RenderTarget( WIDTH, HEIGHT, GL_RGBA, GL_RGBA, GL_FLOAT, 0, false );
   checkGLErr( "RenderTarget::RenderTarget" );
 
-  const int inSizeS = 6;
-  const int inSizeT = 1;
-  const int inSizeP = 1;
-  const int inSurf = 3;
+  const int inSizeS = 3;
+  const int inSizeP = 0;
+  const int inSizeT = 12;
+  const int inSurf = 5;
 
   /*
   float* outH = new float[inSize];
@@ -278,46 +278,148 @@ int main(int argc, char** argv){
   */
   Sphere* spheres = new Sphere[inSizeS];
   std::cout<<"Sphere: "<< spheres[0].radius << "\n";
-  spheres[0].uSurf = 0;
-  spheres[0].center = glm::vec4( 0.0f, 1.414f, 0.0f, 0.0f );
-  
   spheres[1].uSurf = 0;
-  spheres[1].center = glm::vec4( +1.0f, 0.0f, +1.0f, 0.0f);
+  spheres[1].center = glm::vec4( 0.0f, -2.0f, 0.0f, 0.0f );
   spheres[1].radius = 1.0f;
+  /*spheres[1].uSurf = 0;
+  spheres[1].center = glm::vec4( +1.0f, 0.0f, +1.0f, 0.0f);
+  spheres[1].radius = 1.0f;*/
 
-  spheres[2].uSurf = 2;
-  spheres[2].center = glm::vec4( 2.0f, -0.6f, 2.0f, 0.0f);
-  spheres[2].radius = 0.4f;
+  spheres[0].uSurf = 2;
+  spheres[0].center = glm::vec4( 0.0f, +1.50f, 0.0f, 0.0f);
+  spheres[0].radius = 0.2f;
 
+  /*spheres[2].uSurf = 0;
+  spheres[2].center = glm::vec4( +0.0f, 0.0f, -0.0f, 0.0f);
+  spheres[2].radius = 1.0f;*/
 
-  spheres[3].uSurf = 0;
-  spheres[3].center = glm::vec4( +1.0f, 0.0f, -1.0f, 0.0f);
-  spheres[3].radius = 1.0f;
+  spheres[2].uSurf = 0;
+  spheres[2].center = glm::vec4( -2.0f, -2.0f, -2.0f, 0.0f);
+  spheres[2].radius = 1.0f;
 
-  spheres[4].uSurf = 0;
-  spheres[4].center = glm::vec4( -1.0f, -0.0f, -1.0f, 0.0f);
-  spheres[4].radius = 1.0f;
-
-  spheres[5].uSurf = 0;
-  spheres[5].center = glm::vec4( -1.0f, -0.0f, +1.0f, 0.0f);
-  spheres[5].radius = 1.0f;
+  /*spheres[4].uSurf = 0;
+  spheres[4].center = glm::vec4( -1.0f, -0.0f, +1.0f, 0.0f);
+  spheres[4].radius = 1.0f;*/
   Plane* planes = new Plane[inSizeP];
+  int planeSize = 3.0f;
   //std::cout<<"Sphere: "<< planes[0].radius << "\n";
-  planes[0].normal = glm::vec4( 0.0f, 1.0f, 0.0f, 0.0f );
-  planes[0].point = glm::vec4( 0.0f, -1.0f, 0.0f, 0.0f );
+  /*planes[0].normal = glm::vec4( 0.0f, 1.0f, 0.0f, 0.0f );
+  planes[0].point = glm::vec4( 0.0f, -planeSize, 0.0f, 0.0f );
   planes[0].uSurf = 1;
+  
+  planes[1].normal = glm::vec4( 0.0f, -1.0f, 0.0f, 0.0f );
+  planes[1].point = glm::vec4( 0.0f, planeSize, 0.0f, 0.0f );
+  planes[1].uSurf = 1;
+  
+  planes[2].normal = glm::vec4( 1.0f, 0.0f, 0.0f, 0.0f );
+  planes[2].point = glm::vec4( -planeSize, 0.0f, 0.0f, 0.0f );
+  planes[2].uSurf = 1;
+  
+  planes[3].normal = glm::vec4( -1.0f, 0.0f, 0.0f, 0.0f );
+  planes[3].point = glm::vec4( planeSize, 0.0f, 0.0f, 0.0f );
+  planes[3].uSurf = 1;
+  
+  planes[4].normal = glm::vec4( 0.0f, 0.0f, +1.0f, +0.0f );
+  planes[4].point = glm::vec4( 0.0f, 0.0f, -planeSize, 0.0f );
+  planes[4].uSurf = 1;
+  
+  planes[5].normal = glm::vec4( 0.0f, 0.0f, -1.0f, 0.0f );
+  planes[5].point = glm::vec4( 0.0f, 0.0f, +planeSize, 0.0f );
+  planes[5].uSurf = 1;*/
+  
+  
 
   Triangle* triangles = new Triangle[inSizeT];
   //std::cout<<"Sphere: "<< spheres[0].radius << "\n";
-  triangles[0].uSurf = 0;
+  float boxSize = 3.0f;
+  triangles[0].uSurf = 1;
+  triangles[0].p0 = glm::vec4( -boxSize, -boxSize, -boxSize, 0.0f);
+  triangles[0].p1 = glm::vec4( -boxSize, boxSize, -boxSize, 0.0f);
+  triangles[0].p2 = glm::vec4( -boxSize, -boxSize, boxSize, 0.0f);
+  
+  triangles[1].uSurf = 1;
+  triangles[1].p0 = glm::vec4( -boxSize, boxSize, boxSize, 0.0f);
+  triangles[1].p2 = glm::vec4( -boxSize, boxSize, -boxSize, 0.0f);
+  triangles[1].p1 = glm::vec4( -boxSize, -boxSize, boxSize, 0.0f);
+  
+  triangles[2].uSurf = 1;
+  triangles[2].p0 = glm::vec4( boxSize, -boxSize, -boxSize, 0.0f);
+  triangles[2].p2 = glm::vec4( boxSize, boxSize, -boxSize, 0.0f);
+  triangles[2].p1 = glm::vec4( boxSize, -boxSize, boxSize, 0.0f);
+  
+  triangles[3].uSurf = 1;
+  triangles[3].p0 = glm::vec4( boxSize, boxSize, boxSize, 0.0f);
+  triangles[3].p1 = glm::vec4( boxSize, boxSize, -boxSize, 0.0f);
+  triangles[3].p2 = glm::vec4( boxSize, -boxSize, boxSize, 0.0f);
+  
+
+  triangles[4].uSurf = 1;
+  triangles[4].p0 = glm::vec4( -boxSize, -boxSize, -boxSize, 0.0f);
+  triangles[4].p2 = glm::vec4( boxSize, -boxSize, -boxSize, 0.0f);
+  triangles[4].p1 = glm::vec4( -boxSize, -boxSize, boxSize, 0.0f);
+  
+  triangles[5].uSurf = 1;
+  triangles[5].p0 = glm::vec4( boxSize, -boxSize, boxSize, 0.0f);
+  triangles[5].p1 = glm::vec4( boxSize, -boxSize, -boxSize, 0.0f);
+  triangles[5].p2 = glm::vec4( -boxSize, -boxSize, boxSize, 0.0f);
+  
+  triangles[6].uSurf = 1;
+  triangles[6].p0 = glm::vec4( -boxSize, boxSize, -boxSize, 0.0f);
+  triangles[6].p1 = glm::vec4( boxSize, boxSize, -boxSize, 0.0f);
+  triangles[6].p2 = glm::vec4( -boxSize, boxSize, boxSize, 0.0f);
+  
+  triangles[7].uSurf = 1;
+  triangles[7].p0 = glm::vec4( boxSize, boxSize, boxSize, 0.0f);
+  triangles[7].p2 = glm::vec4( boxSize, boxSize, -boxSize, 0.0f);
+  triangles[7].p1 = glm::vec4( -boxSize, boxSize, boxSize, 0.0f);
+  
+  triangles[8].uSurf = 3;
+  triangles[8].p0 = glm::vec4( -boxSize, -boxSize, -boxSize, 0.0f);
+  triangles[8].p1 = glm::vec4( boxSize, -boxSize, -boxSize, 0.0f);
+  triangles[8].p2 = glm::vec4( -boxSize, boxSize, -boxSize, 0.0f);
+  
+  triangles[9].uSurf = 3;
+  triangles[9].p0 = glm::vec4( boxSize, boxSize, -boxSize, 0.0f);
+  triangles[9].p2 = glm::vec4( boxSize, -boxSize, -boxSize, 0.0f);
+  triangles[9].p1 = glm::vec4( -boxSize, boxSize, -boxSize, 0.0f);
+  
+  triangles[10].uSurf = 4;
+  triangles[10].p0 = glm::vec4( -boxSize, -boxSize, boxSize, 0.0f);
+  triangles[10].p2 = glm::vec4( boxSize, -boxSize, boxSize, 0.0f);
+  triangles[10].p1 = glm::vec4( -boxSize, boxSize, boxSize, 0.0f);
+  
+  triangles[11].uSurf = 4;
+  triangles[11].p0 = glm::vec4( boxSize, boxSize, boxSize, 0.0f);
+  triangles[11].p1 = glm::vec4( boxSize, -boxSize, boxSize, 0.0f);
+  triangles[11].p2 = glm::vec4( -boxSize, boxSize, boxSize, 0.0f);
+  
+  /*triangles[12].uSurf = 1;
+  triangles[12].p0 = glm::vec4( -boxSize/4.0f, boxSize, -boxSize/4.0f, 0.0f);
+  triangles[12].p1 = glm::vec4( boxSize/4.0f, boxSize, -boxSize/4.0f, 0.0f);
+  triangles[12].p2 = glm::vec4( -boxSize/4.0f, boxSize, boxSize/4.0f, 0.0f);
+  
+  triangles[13].uSurf = 1;
+  triangles[13].p0 = glm::vec4( boxSize/4.0f, boxSize, boxSize/4.0f, 0.0f);
+  triangles[13].p2 = glm::vec4( boxSize/4.0f, boxSize, -boxSize/4.0f, 0.0f);
+  triangles[13].p1 = glm::vec4( -boxSize/4.0f, boxSize, boxSize/4.0f, 0.0f);*/
+  
+  
+  
 
   GeometryDescriptor* geometry = new GeometryDescriptor( inSizeS, inSizeP, inSizeT );
 
   Surface* pSurf = new Surface[inSurf];
   pSurf[0].vColor = glm::vec4( 1.0f, 1.0f, 0.0f, 1.0f );
-  pSurf[1].vColor = glm::vec4( 0.9f, 0.9f, 0.9f, 0.5f );
-  pSurf[2].vColor = glm::vec4( 0.0f, 1.0f, 0.0f, 1.0f );
-  pSurf[2].vEmissive = glm::vec4( 60.0f, 60.0f, 60.0f, 60.0f );
+  
+  pSurf[1].vColor = glm::vec4( 1.0f, 1.0f, 1.0f, 1.0f );
+  
+  pSurf[2].vColor = glm::vec4( 1.0f, 1.0f, 1.0f, 1.0f );
+  float lPower = 5.0f;
+  pSurf[2].vEmissive = glm::vec4( lPower, lPower, lPower, lPower );
+  
+  pSurf[3].vColor = glm::vec4( 1.0f, 0.0f, 0.0f, 1.0f );
+  
+  pSurf[4].vColor = glm::vec4( 0.0f, 1.0f, 0.0f, 1.0f );
 
   cl::Buffer clSpheres( context, CL_MEM_READ_ONLY, inSizeS * sizeof( Sphere ));
   checkErr(err, "Buffer::Buffer()");
@@ -369,8 +471,11 @@ int main(int argc, char** argv){
 
   cl::Program::Sources source(1, std::make_pair(prog.c_str(), prog.length()+1));
 
+  std::cout<<"Source obtained."<< std::endl;
+  
   cl::Program program(context, source);
-  err = program.build(devices,"");
+  err = program.build(devices,"-cl-opt-disable");
+  std::cout<<"Source obtained."<< std::endl;
 
   std::string buildLog;
   program.getBuildInfo( devices[0], CL_PROGRAM_BUILD_LOG, &buildLog );
@@ -378,7 +483,7 @@ int main(int argc, char** argv){
   checkErr(err, "Program::build()");
   std::cout<<"Built program"<< std::endl;
 
-  cl::Kernel kernel(program, "path_trace", &err);
+  cl::Kernel kernel(program, "bi_directional_path_trace", &err);
   checkErr(err, "Kernel::Kernel()");
 
   err = kernel.setArg(0, clCamera);
@@ -424,11 +529,11 @@ int main(int argc, char** argv){
 
   std::cout<<cam->vUp.x<<","<<cam->vUp.y<<","<<cam->vUp.z<<std::endl;
 
-  std::cout<< sizeof( Sphere )<< std::endl;
+  std::cout<< sizeof( Plane )<< std::endl;
   queue.enqueueWriteBuffer( clCamera, CL_TRUE, 0, 1 * sizeof(CLCamera), (const void*)cam );
   queue.enqueueWriteBuffer( clSpheres, CL_TRUE, 0, inSizeS * sizeof(Sphere), (const void*)spheres);
-  queue.enqueueWriteBuffer( clPlanes, CL_TRUE, 0, inSizeP * sizeof(Plane), (const void*)triangles);
-  queue.enqueueWriteBuffer( clTriangles, CL_TRUE, 0, inSizeT * sizeof(Triangle), (const void*)planes);
+  queue.enqueueWriteBuffer( clPlanes, CL_TRUE, 0, inSizeP * sizeof(Plane), (const void*)planes);
+  queue.enqueueWriteBuffer( clTriangles, CL_TRUE, 0, inSizeT * sizeof(Triangle), (const void*)triangles);
   queue.enqueueWriteBuffer( clGeom, CL_TRUE, 0, 1 * sizeof(GeometryDescriptor), (const void*)geometry);
   queue.enqueueWriteBuffer( clSeed, CL_TRUE, 0, WIDTH * HEIGHT * 4 * sizeof(uint), (const void*)pSeeds);
   queue.enqueueWriteBuffer( clSurf, CL_TRUE, 0, inSurf * sizeof(Surface), (const void*)pSurf);

@@ -52,8 +52,9 @@ Plane::Plane(){
 GeometryDescriptor::GeometryDescriptor( int a, int b, int c ){
 
     this->numSpheres = a;
-    this->numTriangles = b;
-    this->numPlanes = c;
+    this->numPlanes = b;
+	this->numTriangles = c;
+	
 
 }
 
