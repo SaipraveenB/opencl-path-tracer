@@ -630,11 +630,48 @@ __kernel void bi_directional_path_trace(
 
     float4 eyeRef = eyePatch.vDir;
     float4 eyePos = eyePatch.kInter.vPos + eyePatch.vDir * 0.00001f;// Push slightly to avoid self-intersection.            
+	
+    int maxE = 5;
+	
+	
+	FullIntersection currPatchI = eyePatch;
+	float4 incomingDirI = glm::vec4( 0, 0, 0, 0 );
+	
+	float4 eyeVertexList[maxE];
+	float4 eyeNormalList[maxE];
+		
+	cmdlog("\nEye patch trace.\n");
+	for( int i = 0; i < maxE; i++ ){
+		cmdlog("%d Ray Trace:\n");
+		float4 launchRef = currPatchI.vDir;
+		float4 launchPos = currPatchI.kInter.vPos + currPatchI.vDir * 0.00001f;// Push slightly to avoid self-intersection.          
+		float4 launchDir = brdf_lambertian( currPatchI, (float4)(0,0,0,0), incomingDirI, &state, x*HEIGHT + y );
 
-    FullIntersection firstPatch = ray_intersect( eyePos, eyeRef, pSpheres, pPlanes, pTriangles, pDesc, pSurfaces, eyePatch.uPrimType, eyePatch.uIndex );
+		
+		FullIntersection targetPatch = ray_intersect( launchPos, launchRef, pSpheres, pPlanes, pTriangles, pDesc, pSurfaces, currPatchI.uPrimType, currPatchI.uIndex );
+		
+		if( !targetPatch.kInter.bInter ){
+			cmdlog("No intersection\n");
+		}
+		
+		if( targetPatch.vEmissive.w != 0.0f ){
+			// Emissive surface. Terminate.
+			cmdlog("Target patch is Emissive.")
+			break;
+		}
+		
+		eyeVertexList[i] = targetPatch.kInter.vPos;
+		eyeNormalList[i] = targetPatch.vDir;		
+		
+		currPatchI = targetPatch;
+		incomingDirI = launchDir;
+	}
+	
+	
+   // FullIntersection firstPatch = ray_intersect( eyePos, eyeRef, pSpheres, pPlanes, pTriangles, pDesc, pSurfaces, eyePatch.uPrimType, eyePatch.uIndex );
 
     // Unwrap target point. Soon this needs to be an array.
-    float4 vTestPos = firstPatch.kInter.vPos;
+   // float4 vTestPos = firstPatch.kInter.vPos;
 	
     // Handle case where ray strikes emissive surface.
 	
@@ -682,7 +719,6 @@ __kernel void bi_directional_path_trace(
 
     int maxL = 5;
 
-    int maxE = 1;
 
     float pCon = 0.8f;
     // Initialize full contribution to full spectral 0.
@@ -694,57 +730,65 @@ __kernel void bi_directional_path_trace(
 	float preFactor = (1 - pCon)/(1 - pow( pCon, maxL ));
 	int samplesTaken = 0;
 	for( int lti = 0; lti < maxL; lti ++ ){
-        // Check contribution of current patch to vTestPos.
-		cmdlog("\n bounce %d\n", lti);
-    	float4 testDir = normalize( vTestPos - patch.kInter.vPos );
-		cmdlog("testPos: %f, %f, %f, %f\n", vTestPos.x, vTestPos.y, vTestPos.z, vTestPos.w );
-		cmdlog("light patch pos: %f, %f, %f, %f\n", patch.kInter.vPos.x, patch.kInter.vPos.y, patch.kInter.vPos.z, patch.kInter.vPos.w );
-		cmdlog("ray direction: %f, %f, %f, %f\n", testDir.x, testDir.y, testDir.z, testDir.w );
+		// Check contribution of current patch to vTestPos.
 		
-		cmdlog("test criteria: %d, %d\n", firstPatch.uPrimType, firstPatch.uIndex );
-		FullIntersection testPatch = ray_intersect( patch.kInter.vPos, testDir, pSpheres, pPlanes, pTriangles, pDesc, pSurfaces, patch.uPrimType, patch.uIndex );
+		for( int ei; ei < maxE; ei ++ ){
+			cmdlog("\n bounce %d\n", lti);
+			
+			float4 vTestPos = eyeVertexList[ei];
+			float4 vTestDir = eyeNormalList[ei];
+						
+			float4 testDir = normalize( vTestPos - patch.kInter.vPos );
+			cmdlog("testPos: %f, %f, %f, %f\n", vTestPos.x, vTestPos.y, vTestPos.z, vTestPos.w );
+			cmdlog("light patch pos: %f, %f, %f, %f\n", patch.kInter.vPos.x, patch.kInter.vPos.y, patch.kInter.vPos.z, patch.kInter.vPos.w );
+			cmdlog("ray direction: %f, %f, %f, %f\n", testDir.x, testDir.y, testDir.z, testDir.w );
 		
-		cmdlog("test results: %d, %d\n", testPatch.uPrimType, testPatch.uIndex );
-		cmdlog("test results POS: %f, %f, %f, %f\n", testPatch.kInter.vPos.x, testPatch.kInter.vPos.y, testPatch.kInter.vPos.z, testPatch.kInter.vPos.w );
-		float4 contrib = (float4)(0,0,0,0);
+			//cmdlog("test criteria: %d, %d\n", firstPatch.uPrimType, firstPatch.uIndex );
+			FullIntersection testPatch = ray_intersect( patch.kInter.vPos, testDir, pSpheres, pPlanes, pTriangles, pDesc, pSurfaces, patch.uPrimType, patch.uIndex );
+		
+			cmdlog("test results: %d, %d\n", testPatch.uPrimType, testPatch.uIndex );
+			cmdlog("test results POS: %f, %f, %f, %f\n", testPatch.kInter.vPos.x, testPatch.kInter.vPos.y, testPatch.kInter.vPos.z, testPatch.kInter.vPos.w );
+			float4 contrib = (float4)(0,0,0,0);
 		
 		
-		if( firstPatch.uPrimType == testPatch.uPrimType && firstPatch.uIndex == testPatch.uIndex ){
-			//if( dot( firstPatch.vDir, testPatch.vDir ) < 0 ){
-			if( length( vTestPos - testPatch.kInter.vPos ) < 0.0001f && dot( firstPatch.vDir, testPatch.vDir ) > 0 ){
-				cmdlog("LOS acheived.\n", 0);
-				float4 ptVec = testPatch.kInter.vPos - patch.kInter.vPos;
-				ptVec = ptVec;
+			if( firstPatch.uPrimType == testPatch.uPrimType && firstPatch.uIndex == testPatch.uIndex ){
+				//if( dot( firstPatch.vDir, testPatch.vDir ) < 0 ){
+				if( length( vTestPos - testPatch.kInter.vPos ) < 0.0001f && dot( firstPatch.vDir, testPatch.vDir ) > 0 ){
+					cmdlog("LOS acheived.\n", 0);
+					float4 ptVec = testPatch.kInter.vPos - patch.kInter.vPos;
+					ptVec = ptVec;
 				
-				float samplingFactor = native_divide( 1, (float)( ptVec.x*ptVec.x + ptVec.y*ptVec.y + ptVec.z*ptVec.z ) );
-				//float samplingFactor = native_divide( 1, 1 + length( ptVec ) );
+					float samplingFactor = divide( 1, (float)( ptVec.x*ptVec.x + ptVec.y*ptVec.y + ptVec.z*ptVec.z ) );
+					//float samplingFactor = native_divide( 1, 1 + length( ptVec ) );
 				
-				float r = length( ptVec ) * 1.0f;
-				//cmdlog("distance: %f", r);
-				//float samplingFactor = 1 - native_divide( r, half_sqrt( r*r + 0.0001f ) );
+					float r = length( ptVec ) * 1.0f;
+					//cmdlog("distance: %f", r);
+					//float samplingFactor = 1 - native_divide( r, half_sqrt( r*r + 0.0001f ) );
 				
-				//if( r < 0.0f )
-				//	samplingFactor = 0.0f;
+					//if( r < 0.0f )
+					//	samplingFactor = 0.0f;
 				
 				
-				float impFactor = preFactor;
+					//float impFactor = preFactor;
 				
-				float directionalFactor = dot( firstPatch.vDir, testDir ) * dot( patch.vDir, testDir ); 
-				directionalFactor *= sign( directionalFactor );
-				//if( lti != 0 )
-				//	samplingFactor = 1.0f;
-				//else 
-				//	directionalFactor = 1.0f;
+					float directionalFactor = dot( vTestDir, testDir ) * dot( patch.vDir, testDir ); 
+					directionalFactor *= sign( directionalFactor );
+					//if( lti != 0 )
+					//	samplingFactor = 1.0f;
+					//else 
+					//	directionalFactor = 1.0f;
 				
-				cmdlog("LOS sf: %f, df: %f\n", samplingFactor, directionalFactor);
+					cmdlog("LOS sf: %f, df: %f\n", samplingFactor, directionalFactor);
 				
-				contrib = accContrib * samplingFactor * directionalFactor * native_divide( 1, impFactor );
+					contrib = accContrib * samplingFactor * directionalFactor; //* native_divide( 1, impFactor );
 				
+				}
 			}
+			cmdlog("Adding contrib: %f, %f, %f, %f\n", contrib.x, contrib.y, contrib.z, contrib.w); 
+			
+			//preFactor *= pCon;
 		}
-		preFactor *= pCon;
 		
-		cmdlog("Adding contrib: %f, %f, %f, %f\n", contrib.x, contrib.y, contrib.z, contrib.w); 
 		// The 1.0f is the BRDF of the first patch from the eye. we're assuming perfect lambertian. se we set it to 1.0f.
 		
 		
@@ -864,6 +908,9 @@ __kernel void bi_directional_path_trace(
 }
 
 // TODO: Need another kernel for quickly building octree out of Sphere, Triangle and Plane.
+
+
+
 /*
   As of now the path tracer supports 3 primitives.
   Spheres, Planes and Triangles.
