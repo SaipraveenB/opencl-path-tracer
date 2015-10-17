@@ -7,10 +7,10 @@
 #define SAMPLES 10
 
 
-//#define CMD_DEBUG
+#define CMD_DEBUG
 //#define INDIRECT_ONLY
-
 #define BLUR_FACTOR 2.0f
+
 #ifdef CMD_DEBUG
 #define cmdlog(x, ...) if( PIX_X == get_global_id(0) && PIX_Y == get_global_id(1) ) printf(x, __VA_ARGS__);
 #else
@@ -631,37 +631,67 @@ __kernel void bi_directional_path_trace(
     float4 eyeRef = eyePatch.vDir;
     float4 eyePos = eyePatch.kInter.vPos + eyePatch.vDir * 0.00001f;// Push slightly to avoid self-intersection.            
 	
-    int maxE = 5;
+    int maxE = 4;
 	
 	
 	FullIntersection currPatchI = eyePatch;
-	float4 incomingDirI = glm::vec4( 0, 0, 0, 0 );
+	float4 incomingDirI = float4( 0, 1.0f, 0, 0 );
 	
-	float4 eyeVertexList[maxE];
-	float4 eyeNormalList[maxE];
-		
-	cmdlog("\nEye patch trace.\n");
-	for( int i = 0; i < maxE; i++ ){
-		cmdlog("%d Ray Trace:\n");
+	float4 eyeVertexList[5];
+	float4 eyeNormalList[5];
+	float4 accContribList[5];
+	
+	FullIntersection patchList[5];
+	
+	cmdlog("\nEye patch trace.\n", 0);
+	
+    float pConI = 0.6f;
+	
+	int traceE = 0;
+	
+	for( int k = 0; k < maxE; k++ ){
+		cmdlog("%d Ray Trace:\n", k);
 		float4 launchRef = currPatchI.vDir;
-		float4 launchPos = currPatchI.kInter.vPos + currPatchI.vDir * 0.00001f;// Push slightly to avoid self-intersection.          
+		float4 launchPos = currPatchI.kInter.vPos + currPatchI.vDir * 0.00001f;// Push slightly to avoid self-intersection.
+		          
 		float4 launchDir = brdf_lambertian( currPatchI, (float4)(0,0,0,0), incomingDirI, &state, x*HEIGHT + y );
-
+		if( k == 0 )
+			launchDir = launchRef;
 		
-		FullIntersection targetPatch = ray_intersect( launchPos, launchRef, pSpheres, pPlanes, pTriangles, pDesc, pSurfaces, currPatchI.uPrimType, currPatchI.uIndex );
+		FullIntersection targetPatch = ray_intersect( launchPos, launchDir, pSpheres, pPlanes, pTriangles, pDesc, pSurfaces, currPatchI.uPrimType, currPatchI.uIndex );
 		
 		if( !targetPatch.kInter.bInter ){
-			cmdlog("No intersection\n");
+			cmdlog("No intersection\n", 0);
+			
+			if( k == 0 ){
+	        	write_imagef( imgOut, (int2)(x,y), float4(0,0,0,0) );
+			    return;
+			}
+			break;
 		}
 		
 		if( targetPatch.vEmissive.w != 0.0f ){
 			// Emissive surface. Terminate.
-			cmdlog("Target patch is Emissive.")
+			cmdlog("Target patch is Emissive.", 0);
 			break;
 		}
 		
-		eyeVertexList[i] = targetPatch.kInter.vPos;
-		eyeNormalList[i] = targetPatch.vDir;		
+		cmdlog("First HIT %d, %d\n", targetPatch.uPrimType, targetPatch.uIndex); 
+		
+		eyeVertexList[k] = targetPatch.kInter.vPos;
+		eyeNormalList[k] = targetPatch.vDir;		
+		patchList[k] = targetPatch;
+		traceE++;
+		
+		if( k == 0 )
+			accContribList[k] = targetPatch.vDiffuse;
+		else
+			accContribList[k] = accContribList[k-1] * targetPatch.vDiffuse;
+		
+		float fate = get_rng_float( &state, 0 );
+		if( fate > pConI ){
+			break;
+		}
 		
 		currPatchI = targetPatch;
 		incomingDirI = launchDir;
@@ -676,7 +706,7 @@ __kernel void bi_directional_path_trace(
     // Handle case where ray strikes emissive surface.
 	
 	
-    if( firstPatch.kInter.bInter )
+/*    if( firstPatch.kInter.bInter )
     {
 		cmdlog("First HIT %d, %d\n", firstPatch.uPrimType, firstPatch.uIndex); 
 		if( firstPatch.vEmissive.w != 0.0f ){
@@ -690,7 +720,7 @@ __kernel void bi_directional_path_trace(
 		cmdlog("No Intersection: \n", 0);
         write_imagef( imgOut, (int2)(x,y), (float4)(0,0,0,0) );
         return;
-    }
+    }*/
 	
 
     float4 incomingDir = (float4)( 0.0f, 0.0f, 0.0f, 0.0f );
@@ -717,7 +747,7 @@ __kernel void bi_directional_path_trace(
     // Set maximum no of reflections for light ray traversal.
     
 
-    int maxL = 5;
+    int maxL = 1;
 
 
     float pCon = 0.8f;
@@ -732,12 +762,15 @@ __kernel void bi_directional_path_trace(
 	for( int lti = 0; lti < maxL; lti ++ ){
 		// Check contribution of current patch to vTestPos.
 		
-		for( int ei; ei < maxE; ei ++ ){
+		float4 contrib = (float4)(0,0,0,0);
+		
+		for( int ei = 0; ei < traceE; ei ++ ){
 			cmdlog("\n bounce %d\n", lti);
 			
 			float4 vTestPos = eyeVertexList[ei];
 			float4 vTestDir = eyeNormalList[ei];
-						
+			FullIntersection vTargetPatch = patchList[ei];
+			
 			float4 testDir = normalize( vTestPos - patch.kInter.vPos );
 			cmdlog("testPos: %f, %f, %f, %f\n", vTestPos.x, vTestPos.y, vTestPos.z, vTestPos.w );
 			cmdlog("light patch pos: %f, %f, %f, %f\n", patch.kInter.vPos.x, patch.kInter.vPos.y, patch.kInter.vPos.z, patch.kInter.vPos.w );
@@ -748,20 +781,20 @@ __kernel void bi_directional_path_trace(
 		
 			cmdlog("test results: %d, %d\n", testPatch.uPrimType, testPatch.uIndex );
 			cmdlog("test results POS: %f, %f, %f, %f\n", testPatch.kInter.vPos.x, testPatch.kInter.vPos.y, testPatch.kInter.vPos.z, testPatch.kInter.vPos.w );
-			float4 contrib = (float4)(0,0,0,0);
+			
 		
 		
-			if( firstPatch.uPrimType == testPatch.uPrimType && firstPatch.uIndex == testPatch.uIndex ){
-				//if( dot( firstPatch.vDir, testPatch.vDir ) < 0 ){
-				if( length( vTestPos - testPatch.kInter.vPos ) < 0.0001f && dot( firstPatch.vDir, testPatch.vDir ) > 0 ){
+			if( vTargetPatch.uPrimType == testPatch.uPrimType && vTargetPatch.uIndex == testPatch.uIndex ){
+				
+				if( length( vTestPos - testPatch.kInter.vPos ) < 0.0001f && dot( vTargetPatch.vDir, testPatch.vDir ) > 0 ){
 					cmdlog("LOS acheived.\n", 0);
 					float4 ptVec = testPatch.kInter.vPos - patch.kInter.vPos;
 					ptVec = ptVec;
 				
-					float samplingFactor = divide( 1, (float)( ptVec.x*ptVec.x + ptVec.y*ptVec.y + ptVec.z*ptVec.z ) );
+					float samplingFactor = ( 1.0f / (float)( ptVec.x*ptVec.x + ptVec.y*ptVec.y + ptVec.z*ptVec.z ) );
 					//float samplingFactor = native_divide( 1, 1 + length( ptVec ) );
 				
-					float r = length( ptVec ) * 1.0f;
+					//float r = length( ptVec ) * 1.0f;
 					//cmdlog("distance: %f", r);
 					//float samplingFactor = 1 - native_divide( r, half_sqrt( r*r + 0.0001f ) );
 				
@@ -779,12 +812,14 @@ __kernel void bi_directional_path_trace(
 					//	directionalFactor = 1.0f;
 				
 					cmdlog("LOS sf: %f, df: %f\n", samplingFactor, directionalFactor);
-				
-					contrib = accContrib * samplingFactor * directionalFactor; //* native_divide( 1, impFactor );
+					
+					//float impFactor = 1.0f/pow(1.3f,lti+ei);
+					contrib = accContrib * samplingFactor * directionalFactor * accContribList[ei];// * impFactor; //* native_divide( 1, impFactor );
 				
 				}
 			}
 			cmdlog("Adding contrib: %f, %f, %f, %f\n", contrib.x, contrib.y, contrib.z, contrib.w); 
+			samplesTaken++;
 			
 			//preFactor *= pCon;
 		}
@@ -798,7 +833,6 @@ __kernel void bi_directional_path_trace(
 #endif
 		fullContrib += contrib;
 		
-		samplesTaken++;
 		
 		
 		float4 launchRef = patch.vDir;
@@ -856,19 +890,19 @@ __kernel void bi_directional_path_trace(
 			break;
 		}
 		
-		float directionalFactor = -dot( target.vDir, launchDir ) * dot( launchDir, launchRef );
+		/*float directionalFactor = -dot( target.vDir, launchDir ) * dot( launchDir, launchRef );
 		directionalFactor *= sign( directionalFactor );
 		float4 ptVec = ( launchPos - target.kInter.vPos );
-		float samplingFactor = native_divide( 1, 1 + (float)( ptVec.x*ptVec.x + ptVec.y*ptVec.y + ptVec.z*ptVec.z ) );
+		float samplingFactor = native_divide( 1, 1 + (float)( ptVec.x*ptVec.x + ptVec.y*ptVec.y + ptVec.z*ptVec.z ) );*/
 		//float samplingFactor = native_divide( 1, 1 + length( ptVec ) );
 		
 		//if( lti != 0 ) samplingFactor = 1.0f;
-		samplingFactor = 1.0f;
+		//samplingFactor = 1.0f;
 		//else directionalFactor = 1.0f;
-		directionalFactor = 1.0f;
+		//directionalFactor = 1.0f;
 		
-		cmdlog("sf: %f, df: %f\n", samplingFactor, directionalFactor);		
-     	accContrib *= target.vDiffuse * 1.0f * samplingFactor * directionalFactor;
+		//cmdlog("sf: %f, df: %f\n", samplingFactor, directionalFactor);		
+     	accContrib *= target.vDiffuse;// * 1.0f * samplingFactor * directionalFactor;
 		
 		//col = patch.vDiffuse * col;
 		
@@ -878,17 +912,14 @@ __kernel void bi_directional_path_trace(
     
     
     // Do light_intensity * sigma(contrib) * patch_brdf to get final spectral intensity.
-	float4 ptVec = ( firstPatch.kInter.vPos - eyePatch.kInter.vPos );
-	float samplingFactor = native_divide( 1, 1 + (float)( ptVec.x*ptVec.x + ptVec.y*ptVec.y + ptVec.z*ptVec.z ) ); 
-	samplingFactor = 1.0f;
+	//float4 ptVec = ( firstPatch.kInter.vPos - eyePatch.kInter.vPos );
+	//float samplingFactor = native_divide( 1, 1 + (float)( ptVec.x*ptVec.x + ptVec.y*ptVec.y + ptVec.z*ptVec.z ) ); 
+	//samplingFactor = 1.0f;
 	if( samplesTaken == 0.0f )
 		col = (float)(0,0,0,0);
     else
-#ifdef INDIRECT_ONLY
-		col = lightPatch.vEmissive * fullContrib * samplingFactor  * native_divide( 1.0f, samplesTaken );// * firstPatch.vDiffuse;
-#else
-		col = lightPatch.vEmissive * fullContrib * samplingFactor  * native_divide( 1.0f, samplesTaken ) * firstPatch.vDiffuse;
-#endif
+		col = lightPatch.vEmissive * fullContrib * native_divide( 1.0f, samplesTaken );// * firstPatch.vDiffuse;
+
     //col = (float4) (1.0f, 1.0f, 1.0f, 1.0f);
 	
 	cmdlog("numSamples: %d\n", numSamples);

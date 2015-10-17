@@ -239,7 +239,7 @@ int main(int argc, char** argv){
   CGLContextObj kCGLContext = CGLGetCurrentContext();
   CGLShareGroupObj kCGLShareGroup = CGLGetShareGroup(kCGLContext);
   cl_context_properties cprops[6] = {CL_CONTEXT_PLATFORM, (cl_context_properties)(platformList[0])(),CL_CONTEXT_PROPERTY_USE_CGL_SHAREGROUP_APPLE , (cl_context_properties) kCGLShareGroup, 0, 0};
-  cl::Context context( CL_DEVICE_TYPE_CPU, cprops, NULL, NULL, &err);
+  cl::Context context( CL_DEVICE_TYPE_GPU, cprops, NULL, NULL, &err);
   #endif
 
   #ifdef __linux__
@@ -252,7 +252,7 @@ int main(int argc, char** argv){
     	CL_CONTEXT_PLATFORM, (cl_context_properties)platform,
     	0
     };
-    cl::Context context( CL_DEVICE_TYPE_CPU, props, NULL, NULL, &err);
+    cl::Context context( CL_DEVICE_TYPE_GPU, props, NULL, NULL, &err);
   //cl::Context context = clCreateContextFromType(props, CL_DEVICE_TYPE_CPU, NULL, NULL, &err);
   #endif
 
@@ -414,7 +414,7 @@ int main(int argc, char** argv){
   pSurf[1].vColor = glm::vec4( 1.0f, 1.0f, 1.0f, 1.0f );
   
   pSurf[2].vColor = glm::vec4( 1.0f, 1.0f, 1.0f, 1.0f );
-  float lPower = 5.0f;
+  float lPower = 50.0f;
   pSurf[2].vEmissive = glm::vec4( lPower, lPower, lPower, lPower );
   
   pSurf[3].vColor = glm::vec4( 1.0f, 0.0f, 0.0f, 1.0f );
